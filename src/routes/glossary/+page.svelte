@@ -52,7 +52,7 @@
 
 <div class="flex flex-col gap-6 py-4">
 	<header class="flex items-center justify-between gap-4">
-		<h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+		<h1 class="text-2xl font-bold text-foreground">
 			{UI.GLOSSARY_PAGE.TITLE}
 		</h1>
 		<label
@@ -63,11 +63,11 @@
 				id="glossary-enabled-toggle"
 				type="checkbox"
 				data-testid="glossary-toggle"
-				class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+				class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
 				checked={glossary.enabled}
 				onchange={() => toggleEnabled()}
 			/>
-			<span class="text-sm text-gray-700 dark:text-gray-200">
+			<span class="text-sm text-muted-foreground">
 				{UI.GLOSSARY_PAGE.TOGGLE_LABEL}
 			</span>
 		</label>
@@ -75,7 +75,7 @@
 
 	<section class="flex flex-col gap-3">
 		<div class="flex items-center justify-between">
-			<h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">
+			<h2 class="text-lg font-semibold text-muted-foreground">
 				{UI.GLOSSARY_PAGE.ENTRY_COUNT(glossary.entries.length)}
 			</h2>
 		</div>
@@ -85,7 +85,7 @@
 		{#if glossary.entries.length === 0}
 			<p
 				data-testid="glossary-empty-message"
-				class="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-200 dark:border-gray-700 rounded-md p-4 text-center"
+				class="text-sm text-muted-foreground bg-muted border border-dashed border-border rounded-md p-4 text-center"
 			>
 				{UI.GLOSSARY_PAGE.EMPTY_MESSAGE}
 			</p>

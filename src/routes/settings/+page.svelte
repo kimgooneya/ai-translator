@@ -61,9 +61,9 @@
 	<title>{UI.SETTINGS_PAGE.TITLE} – {UI.APP_TITLE}</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6 py-4">
+<div class="flex flex-col gap-6 py-4 text-foreground">
 	<header>
-		<h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+		<h1 class="text-2xl font-semibold tracking-tight text-foreground">
 			{UI.SETTINGS_PAGE.TITLE}
 		</h1>
 	</header>
@@ -78,7 +78,7 @@
 	</div>
 
 	<section data-testid="preset-providers-section" class="flex flex-col gap-3">
-		<h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">Provider</h2>
+		<h2 class="text-lg font-semibold text-foreground">Provider</h2>
 		<div class="grid gap-4 sm:grid-cols-2">
 			{#each PRESET_PROVIDERS as preset (preset.id)}
 				<ProviderCard

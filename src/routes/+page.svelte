@@ -181,14 +181,14 @@
 	{#if !hasApiKey}
 		<div
 			data-testid="no-api-key-warning"
-			class="flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-md px-4 py-2"
+			class="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-md px-4 py-2"
 		>
-			<span class="text-sm text-yellow-800 dark:text-yellow-200">
+			<span class="text-sm text-destructive">
 				{hasActiveProvider ? UI.ERRORS.NO_API_KEY : UI.ERRORS.NO_ACTIVE_PROVIDER}
 			</span>
 			<a
 				href="/settings"
-				class="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium whitespace-nowrap"
+				class="text-sm text-primary hover:underline font-medium whitespace-nowrap"
 			>
 				설정으로 이동 →
 			</a>
@@ -198,9 +198,9 @@
 	{#if sourceLang === 'auto' && detectedLanguage}
 		<div
 			data-testid="detected-language"
-			class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md px-4 py-2"
+			class="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-md px-4 py-2"
 		>
-			<span class="text-sm text-blue-800 dark:text-blue-200">
+			<span class="text-sm text-primary">
 				{UI.TRANSLATE_PAGE.DETECTED_LANGUAGE(languageName(detectedLanguage))}
 			</span>
 		</div>
@@ -211,10 +211,10 @@
 			{#if loadedFile}
 				<div
 					data-testid="loaded-file-chip"
-					class="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
+					class="flex items-center gap-2 px-3 py-2 rounded-md bg-accent border border-border"
 				>
 					<svg
-						class="w-5 h-5 text-blue-500 dark:text-blue-400 flex-shrink-0"
+						class="w-5 h-5 text-primary flex-shrink-0"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -226,7 +226,7 @@
 							d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
 						/>
 					</svg>
-					<span class="text-sm text-blue-700 dark:text-blue-300 font-medium truncate">
+					<span class="text-sm text-accent-foreground font-medium truncate">
 						{loadedFile.name}
 					</span>
 					<button
@@ -234,7 +234,7 @@
 						data-testid="remove-file-button"
 						onclick={handleRemoveFile}
 						aria-label={UI.TRANSLATE_PAGE.BUTTON_UPLOAD}
-						class="ml-auto text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 transition flex-shrink-0"
+						class="ml-auto text-muted-foreground hover:text-destructive transition flex-shrink-0"
 					>
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -259,7 +259,7 @@
 					<label
 						data-testid="file-upload-label"
 						for="file-upload"
-						class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition cursor-pointer"
+						class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-secondary hover:bg-secondary/80 text-secondary-foreground transition cursor-pointer"
 					>
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -280,7 +280,7 @@
 						onchange={handleFileUpload}
 					/>
 				</div>
-				<span class="text-xs text-gray-400 dark:text-gray-500">
+				<span class="text-xs text-muted-foreground">
 					{UI.TRANSLATE_PAGE.CHAR_COUNT(charCount)}
 				</span>
 			</div>
@@ -288,16 +288,16 @@
 
 		<div
 			data-testid="result-area"
-			class="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-y-auto"
+			class="px-4 py-3 rounded-lg border border-border bg-muted overflow-y-auto"
 			style="min-height: 300px;"
 		>
 			{#if resultText}
-				<p data-testid="result-text" class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+				<p data-testid="result-text" class="text-sm text-foreground whitespace-pre-wrap">
 					{resultText}
 				</p>
 			{/if}
 			{#if !resultText}
-				<p data-testid="result-placeholder" class="text-sm text-gray-400 dark:text-gray-500">
+				<p data-testid="result-placeholder" class="text-sm text-muted-foreground">
 					{UI.TRANSLATE_PAGE.PLACEHOLDER_RESULT}
 				</p>
 			{/if}

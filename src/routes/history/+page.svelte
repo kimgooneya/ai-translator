@@ -8,6 +8,7 @@
 	} from '$lib/stores/history';
 	import HistoryList from '$lib/components/HistoryList.svelte';
 	import HistoryDetailModal from '$lib/components/HistoryDetailModal.svelte';
+	import { Button } from '$lib/components/ui/button/index.js';
 
 	let entries = $derived($historyStore);
 	let selected = $state<TranslationHistoryEntry | null>(null);
@@ -37,25 +38,27 @@
 
 <div class="flex flex-col gap-6 py-4">
 	<header class="flex items-center justify-between gap-4">
-		<h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+		<h1 class="text-2xl font-semibold text-foreground">
 			{UI.HISTORY_PAGE.TITLE}
 		</h1>
-		<button
+		<Button
 			type="button"
+			variant="outline"
+			size="sm"
 			data-testid="history-clear-all-button"
 			onclick={handleClearAll}
 			disabled={entries.length === 0}
-			class="px-3 py-1.5 rounded-md text-sm font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+			class="text-destructive hover:text-destructive"
 		>
 			{UI.HISTORY_PAGE.BUTTON_CLEAR_ALL}
-		</button>
+		</Button>
 	</header>
 
 	<section class="flex flex-col gap-3">
 		{#if entries.length === 0}
 			<p
 				data-testid="history-empty-message"
-				class="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-200 dark:border-gray-700 rounded-md p-4 text-center"
+				class="text-sm text-muted-foreground bg-muted border border-dashed border-border rounded-md p-4 text-center"
 			>
 				{UI.HISTORY_PAGE.EMPTY_MESSAGE}
 			</p>
@@ -64,7 +67,7 @@
 		{/if}
 	</section>
 
-	<footer class="text-xs text-gray-500 dark:text-gray-400">
+	<footer class="text-xs text-muted-foreground">
 		<p data-testid="history-limit-notice">{UI.HISTORY_PAGE.LIMIT_NOTICE}</p>
 	</footer>
 </div>
