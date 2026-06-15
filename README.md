@@ -125,7 +125,9 @@ src/
 
 ## Contributing
 
-Contributions welcome! See CONTRIBUTING.md for guidelines.
+This is a personal project and I'm currently not accepting external pull requests. You're welcome to fork and modify under the MIT License. Bug reports via [Issues](https://github.com/kimgooneya/ai-translator/issues) are appreciated.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
