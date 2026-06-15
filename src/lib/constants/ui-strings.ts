@@ -89,7 +89,9 @@ export const UI = {
     STREAM_INTERRUPTED: "번역이 중단되었습니다. 네트워크 연결을 확인하세요.",
     NETWORK_ERROR: "네트워크 오류가 발생했습니다.",
     STORAGE_FULL: "저장 공간이 가득 찼습니다. 오래된 기록을 삭제해 주세요.",
-    INVALID_FILE_TYPE: ".txt 파일만 업로드할 수 있습니다.",
+    INVALID_FILE_TYPE: ".txt, .pdf 파일만 업로드할 수 있습니다.",
+    PDF_NO_TEXT: "PDF에서 텍스트를 추출할 수 없습니다. 스캔된 PDF일 수 있습니다.",
+    PDF_EXTRACTION_FAILED: "PDF 처리 중 오류가 발생했습니다.",
     UNKNOWN: "알 수 없는 오류가 발생했습니다.",
   },
 } as const;
