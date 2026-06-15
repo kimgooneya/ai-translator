@@ -2,6 +2,11 @@
 	import { untrack } from 'svelte';
 	import { UI } from '$lib/constants/ui-strings';
 	import type { GlossaryEntry } from '$lib/schemas';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Separator } from '$lib/components/ui/separator/index.js';
 
 	let {
 		onsubmit,
@@ -23,15 +28,6 @@
 
 	type ErrorMap = { source?: string; target?: string };
 	let errors = $state<ErrorMap>({});
-
-	const inputClass =
-		'w-full px-3 py-2 rounded-md border bg-white dark:bg-gray-700 ' +
-		'text-gray-800 dark:text-gray-100 focus:ring-2 focus:border-transparent outline-none transition ' +
-		'border-gray-300 dark:border-gray-600 focus:ring-blue-500';
-	const errorInputClass =
-		'w-full px-3 py-2 rounded-md border bg-white dark:bg-gray-700 ' +
-		'text-gray-800 dark:text-gray-100 focus:ring-2 focus:border-transparent outline-none transition ' +
-		'border-red-400 dark:border-red-500 focus:ring-red-500';
 
 	function validate(): boolean {
 		const next: ErrorMap = {};
@@ -69,77 +65,77 @@
 	data-testid="glossary-form"
 	data-mode={isEdit ? 'edit' : 'add'}
 	onsubmit={handleSubmit}
-	class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-3"
 	novalidate
 >
-	<div class="flex flex-col gap-1.5">
-		<label for="glossary-source-{isEdit ? 'edit' : 'add'}" class="text-sm text-gray-600 dark:text-gray-300">
-			{UI.GLOSSARY_PAGE.COLUMN_SOURCE}
-		</label>
-		<input
-			id="glossary-source-{isEdit ? 'edit' : 'add'}"
-			type="text"
-			data-testid="glossary-source-input"
-			placeholder={UI.GLOSSARY_PAGE.ENTRY_SOURCE_PLACEHOLDER}
-			autocomplete="off"
-			class={errors.source ? errorInputClass : inputClass}
-			bind:value={source}
-		/>
-		{#if errors.source}
-			<p data-testid="error-source" class="text-xs text-red-600 dark:text-red-400">{errors.source}</p>
-		{/if}
-	</div>
+	<Card.Root>
+		<Card.Content class="flex flex-col gap-4 pt-6">
+			<div class="grid gap-2">
+				<Label for="glossary-source-{isEdit ? 'edit' : 'add'}">
+					{UI.GLOSSARY_PAGE.COLUMN_SOURCE}
+				</Label>
+				<Input
+					id="glossary-source-{isEdit ? 'edit' : 'add'}"
+					type="text"
+					data-testid="glossary-source-input"
+					placeholder={UI.GLOSSARY_PAGE.ENTRY_SOURCE_PLACEHOLDER}
+					autocomplete="off"
+					aria-invalid={errors.source ? 'true' : undefined}
+					bind:value={source}
+				/>
+				{#if errors.source}
+					<p data-testid="error-source" class="text-xs text-destructive">{errors.source}</p>
+				{/if}
+			</div>
 
-	<div class="flex flex-col gap-1.5">
-		<label for="glossary-target-{isEdit ? 'edit' : 'add'}" class="text-sm text-gray-600 dark:text-gray-300">
-			{UI.GLOSSARY_PAGE.COLUMN_TARGET}
-		</label>
-		<input
-			id="glossary-target-{isEdit ? 'edit' : 'add'}"
-			type="text"
-			data-testid="glossary-target-input"
-			placeholder={UI.GLOSSARY_PAGE.ENTRY_TARGET_PLACEHOLDER}
-			autocomplete="off"
-			class={errors.target ? errorInputClass : inputClass}
-			bind:value={target}
-		/>
-		{#if errors.target}
-			<p data-testid="error-target" class="text-xs text-red-600 dark:text-red-400">{errors.target}</p>
-		{/if}
-	</div>
+			<div class="grid gap-2">
+				<Label for="glossary-target-{isEdit ? 'edit' : 'add'}">
+					{UI.GLOSSARY_PAGE.COLUMN_TARGET}
+				</Label>
+				<Input
+					id="glossary-target-{isEdit ? 'edit' : 'add'}"
+					type="text"
+					data-testid="glossary-target-input"
+					placeholder={UI.GLOSSARY_PAGE.ENTRY_TARGET_PLACEHOLDER}
+					autocomplete="off"
+					aria-invalid={errors.target ? 'true' : undefined}
+					bind:value={target}
+				/>
+				{#if errors.target}
+					<p data-testid="error-target" class="text-xs text-destructive">{errors.target}</p>
+				{/if}
+			</div>
 
-	<div class="flex flex-col gap-1.5">
-		<label for="glossary-note-{isEdit ? 'edit' : 'add'}" class="text-sm text-gray-600 dark:text-gray-300">
-			{UI.GLOSSARY_PAGE.COLUMN_NOTE}
-		</label>
-		<input
-			id="glossary-note-{isEdit ? 'edit' : 'add'}"
-			type="text"
-			data-testid="glossary-note-input"
-			placeholder={UI.GLOSSARY_PAGE.ENTRY_NOTE_PLACEHOLDER}
-			autocomplete="off"
-			class={inputClass}
-			bind:value={note}
-		/>
-	</div>
+			<div class="grid gap-2">
+				<Label for="glossary-note-{isEdit ? 'edit' : 'add'}">
+					{UI.GLOSSARY_PAGE.COLUMN_NOTE}
+				</Label>
+				<Input
+					id="glossary-note-{isEdit ? 'edit' : 'add'}"
+					type="text"
+					data-testid="glossary-note-input"
+					placeholder={UI.GLOSSARY_PAGE.ENTRY_NOTE_PLACEHOLDER}
+					autocomplete="off"
+					bind:value={note}
+				/>
+			</div>
+		</Card.Content>
 
-	<div class="flex items-center gap-2">
-		<button
-			type="submit"
-			data-testid="glossary-submit-button"
-			class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition"
-		>
-			{isEdit ? UI.GLOSSARY_PAGE.BUTTON_EDIT : UI.GLOSSARY_PAGE.BUTTON_ADD}
-		</button>
-		{#if isEdit && oncancel}
-			<button
-				type="button"
-				data-testid="glossary-cancel-button"
-				onclick={() => oncancel?.()}
-				class="px-4 py-2 rounded-md text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition"
-			>
-				취소
-			</button>
-		{/if}
-	</div>
+		<Separator />
+
+		<Card.Footer class="gap-2">
+			<Button type="submit" data-testid="glossary-submit-button">
+				{isEdit ? UI.GLOSSARY_PAGE.BUTTON_EDIT : UI.GLOSSARY_PAGE.BUTTON_ADD}
+			</Button>
+			{#if isEdit && oncancel}
+				<Button
+					type="button"
+					variant="outline"
+					data-testid="glossary-cancel-button"
+					onclick={() => oncancel?.()}
+				>
+					취소
+				</Button>
+			{/if}
+		</Card.Footer>
+	</Card.Root>
 </form>

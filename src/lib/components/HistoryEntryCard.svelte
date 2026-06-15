@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { UI } from '$lib/constants/ui-strings';
 	import type { TranslationHistoryEntry } from '$lib/schemas';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 
 	let {
 		entry,
@@ -23,77 +26,76 @@
 	let responsePreview = $derived(preview(entry.response));
 </script>
 
-<article
+<Card.Root
 	data-testid="history-entry-card"
 	data-entry-id={entry.id}
-	class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-3"
+	class="gap-3 py-4"
 >
-	<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-		<span
-			data-testid="history-created-at"
-			class="text-xs text-gray-500 dark:text-gray-400 tabular-nums"
-		>
-			{createdAtLabel}
-		</span>
-		<span
-			data-testid="history-provider"
-			class="text-xs font-medium text-gray-700 dark:text-gray-200"
-		>
-			{entry.providerName}
-		</span>
-		<span
-			data-testid="history-model"
-			class="text-xs text-gray-500 dark:text-gray-400 break-all"
-		>
-			{entry.modelName}
-		</span>
-	</div>
+	<Card.Header>
+		<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+			<span
+				data-testid="history-created-at"
+				class="text-xs text-muted-foreground tabular-nums"
+			>
+				{createdAtLabel}
+			</span>
+			<span
+				data-testid="history-provider"
+				class="text-xs font-medium text-foreground"
+			>
+				{entry.providerName}
+			</span>
+			<span
+				data-testid="history-model"
+				class="text-xs text-muted-foreground break-all"
+			>
+				{entry.modelName}
+			</span>
+		</div>
+	</Card.Header>
 
-	<div class="flex flex-wrap items-center gap-2 text-sm">
-		<span
-			data-testid="history-source-lang"
-			class="font-medium text-gray-700 dark:text-gray-200"
-		>
-			{entry.request.sourceLang}
-		</span>
-		<span class="text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
-		<span
-			data-testid="history-target-lang"
-			class="font-medium text-gray-700 dark:text-gray-200"
-		>
-			{entry.request.targetLang}
-		</span>
-	</div>
+	<Card.Content class="flex flex-col gap-3">
+		<div class="flex flex-wrap items-center gap-2 text-sm">
+			<Badge variant="secondary" data-testid="history-source-lang">
+				{entry.request.sourceLang}
+			</Badge>
+			<span class="text-muted-foreground" aria-hidden="true">→</span>
+			<Badge variant="secondary" data-testid="history-target-lang">
+				{entry.request.targetLang}
+			</Badge>
+		</div>
 
-	<p
-		data-testid="history-source-preview"
-		class="text-sm text-gray-700 dark:text-gray-200 break-words"
-	>
-		{sourcePreview}
-	</p>
-	<p
-		data-testid="history-response-preview"
-		class="text-sm text-gray-800 dark:text-gray-100 break-words"
-	>
-		{responsePreview}
-	</p>
+		<p
+			data-testid="history-source-preview"
+			class="text-sm text-muted-foreground break-words"
+		>
+			{sourcePreview}
+		</p>
+		<p
+			data-testid="history-response-preview"
+			class="text-sm text-foreground break-words"
+		>
+			{responsePreview}
+		</p>
+	</Card.Content>
 
-	<div class="flex items-center gap-2 self-end">
-		<button
-			type="button"
+	<Card.Footer class="gap-2">
+		<Button
+			variant="ghost"
+			size="sm"
 			data-testid="history-detail-button"
 			onclick={() => onshowdetail(entry)}
-			class="px-3 py-1.5 rounded-md text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition"
 		>
 			{UI.HISTORY_PAGE.BUTTON_DETAIL}
-		</button>
-		<button
-			type="button"
+		</Button>
+		<Button
+			variant="ghost"
+			size="sm"
 			data-testid="history-delete-button"
+			class="text-destructive hover:text-destructive"
 			onclick={() => ondelete(entry.id)}
-			class="px-3 py-1.5 rounded-md text-sm font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-300 transition"
 		>
 			{UI.HISTORY_PAGE.BUTTON_DELETE}
-		</button>
-	</div>
-</article>
+		</Button>
+	</Card.Footer>
+</Card.Root>

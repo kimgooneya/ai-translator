@@ -1,115 +1,103 @@
 <script lang="ts">
+	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import X from '@lucide/svelte/icons/x';
 	import { UI } from '$lib/constants/ui-strings';
 	import type { TranslationHistoryEntry } from '$lib/schemas';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Separator } from '$lib/components/ui/separator/index.js';
 
-	let { entry, onclose }: { entry: TranslationHistoryEntry | null; onclose: () => void } = $props();
+	let {
+		entry,
+		onclose
+	}: { entry: TranslationHistoryEntry | null; onclose: () => void } = $props();
+
+	let open = $derived(entry !== null);
+
+	function handleOpenChange(next: boolean): void {
+		if (!next) {
+			onclose();
+		}
+	}
 
 	let createdAtLabel = $derived(
 		entry ? UI.HISTORY_PAGE.CREATED_AT_FORMATTER(new Date(entry.createdAt)) : ''
 	);
-
-	function handleBackdropClick(event: MouseEvent): void {
-		if (event.target === event.currentTarget) {
-			onclose();
-		}
-	}
-
-	function handleKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') {
-			onclose();
-		}
-	}
 </script>
 
-<svelte:window onkeydown={entry ? handleKeydown : undefined} />
-
-{#if entry}
-	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-	<div
-		data-testid="history-detail-backdrop"
-		role="presentation"
-		tabindex="-1"
-		onclick={handleBackdropClick}
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-	>
-		<div
+<DialogPrimitive.Root {open} onOpenChange={handleOpenChange}>
+	<DialogPrimitive.Portal>
+		<Dialog.Overlay
+			data-testid="history-detail-backdrop"
+		/>
+		<DialogPrimitive.Content
 			data-testid="history-detail-modal"
-			role="dialog"
-			aria-modal="true"
-			aria-label={UI.HISTORY_PAGE.TITLE}
-			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl max-h-[85vh] flex flex-col"
+			class="bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 max-h-[85vh] overflow-y-auto"
 		>
-			<header
-				class="flex items-center justify-between gap-4 p-4 border-b border-gray-200 dark:border-gray-700"
-			>
-				<h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">
+			<Dialog.Header>
+				<Dialog.Title>{UI.HISTORY_PAGE.TITLE}</Dialog.Title>
+				<Dialog.Description class="sr-only">
 					{UI.HISTORY_PAGE.TITLE}
-				</h2>
-				<button
-					type="button"
-					data-testid="history-detail-close"
-					onclick={() => onclose()}
-					class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl leading-none px-2"
-					aria-label="닫기"
-				>
-					&times;
-				</button>
-			</header>
+				</Dialog.Description>
+			</Dialog.Header>
 
-			<div class="flex flex-col gap-4 p-4 overflow-y-auto">
+			{#if entry}
 				<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
 					<span
 						data-testid="history-detail-created-at"
-						class="text-gray-500 dark:text-gray-400 tabular-nums"
+						class="text-muted-foreground tabular-nums"
 					>
 						{createdAtLabel}
 					</span>
 					<span
 						data-testid="history-detail-provider"
-						class="font-medium text-gray-700 dark:text-gray-200"
+						class="font-medium text-foreground"
 					>
 						{entry.providerName}
 					</span>
 					<span
 						data-testid="history-detail-model"
-						class="text-gray-500 dark:text-gray-400 break-all"
+						class="text-muted-foreground break-all"
 					>
 						{entry.modelName}
 					</span>
 					{#if entry.tokensUsed !== undefined}
-						<span
+						<Badge
+							variant="secondary"
 							data-testid="history-detail-tokens"
-							class="text-xs text-gray-500 dark:text-gray-400"
 						>
 							tokens: {entry.tokensUsed}
-						</span>
+						</Badge>
 					{/if}
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2 text-sm">
-					<span
+					<Badge
+						variant="secondary"
 						data-testid="history-detail-source-lang"
-						class="font-medium text-gray-700 dark:text-gray-200"
 					>
 						{entry.request.sourceLang}
-					</span>
-					<span class="text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
-					<span
+					</Badge>
+					<span class="text-muted-foreground" aria-hidden="true">→</span>
+					<Badge
+						variant="secondary"
 						data-testid="history-detail-target-lang"
-						class="font-medium text-gray-700 dark:text-gray-200"
 					>
 						{entry.request.targetLang}
-					</span>
+					</Badge>
 				</div>
+
+				<Separator />
 
 				{#if entry.request.customPrompt}
 					<div class="flex flex-col gap-1">
-						<span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+						<span class="text-xs font-medium text-muted-foreground">
 							{UI.TRANSLATE_PAGE.LABEL_CUSTOM_PROMPT}
 						</span>
 						<p
 							data-testid="history-detail-custom-prompt"
-							class="text-sm text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900/40 rounded-md p-3 break-words whitespace-pre-wrap"
+							class="text-sm text-foreground bg-muted rounded-md p-3 break-words whitespace-pre-wrap"
 						>
 							{entry.request.customPrompt}
 						</p>
@@ -117,7 +105,10 @@
 				{/if}
 
 				{#if entry.request.glossary}
-					<div data-testid="history-detail-glossary" class="text-xs text-gray-600 dark:text-gray-300">
+					<div
+						data-testid="history-detail-glossary"
+						class="text-xs text-muted-foreground"
+					>
 						{UI.TRANSLATE_PAGE.LABEL_GLOSSARY_TOGGLE}:
 						{entry.request.glossary.enabled ? '사용' : '미사용'}
 						{#if entry.request.glossary.entries.length > 0}
@@ -127,29 +118,40 @@
 				{/if}
 
 				<div class="flex flex-col gap-1">
-					<span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+					<span class="text-xs font-medium text-muted-foreground">
 						{UI.TRANSLATE_PAGE.PLACEHOLDER_SOURCE}
 					</span>
 					<p
 						data-testid="history-detail-source"
-						class="text-sm text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-900/40 rounded-md p-3 break-words whitespace-pre-wrap"
+						class="text-sm text-foreground bg-muted rounded-md p-3 break-words whitespace-pre-wrap"
 					>
 						{entry.request.sourceText}
 					</p>
 				</div>
 
 				<div class="flex flex-col gap-1">
-					<span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+					<span class="text-xs font-medium text-muted-foreground">
 						{UI.TRANSLATE_PAGE.PLACEHOLDER_RESULT}
 					</span>
 					<p
 						data-testid="history-detail-response"
-						class="text-sm text-gray-800 dark:text-gray-100 bg-blue-50 dark:bg-blue-900/20 rounded-md p-3 break-words whitespace-pre-wrap"
+						class="text-sm text-foreground bg-primary/10 rounded-md p-3 break-words whitespace-pre-wrap"
 					>
 						{entry.response}
 					</p>
 				</div>
-			</div>
-		</div>
-	</div>
-{/if}
+			{/if}
+
+			<Button
+				variant="ghost"
+				size="icon"
+				data-testid="history-detail-close"
+				class="absolute end-4 top-4"
+				aria-label="닫기"
+				onclick={() => onclose()}
+			>
+				<X class="size-4" />
+			</Button>
+		</DialogPrimitive.Content>
+	</DialogPrimitive.Portal>
+</DialogPrimitive.Root>

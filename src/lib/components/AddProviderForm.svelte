@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { UI } from '$lib/constants/ui-strings';
 	import type { Provider, ProviderConfig } from '$lib/schemas';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 
 	let {
 		onadd
@@ -36,15 +41,6 @@
 
 	type ErrorMap = { name?: string; baseURL?: string; models?: string };
 	let errors = $state<ErrorMap>({});
-
-	const inputClass =
-		'w-full px-3 py-2 rounded-md border bg-white dark:bg-gray-700 ' +
-		'text-gray-800 dark:text-gray-100 focus:ring-2 focus:border-transparent outline-none transition ' +
-		'border-gray-300 dark:border-gray-600 focus:ring-blue-500';
-	const errorInputClass =
-		'w-full px-3 py-2 rounded-md border bg-white dark:bg-gray-700 ' +
-		'text-gray-800 dark:text-gray-100 focus:ring-2 focus:border-transparent outline-none transition ' +
-		'border-red-400 dark:border-red-500 focus:ring-red-500';
 
 	function isValidUrl(value: string): boolean {
 		try {
@@ -102,93 +98,90 @@
 		onadd(provider, config);
 		resetForm();
 	}
+
+	const defaultModelTriggerText = $derived(
+		models.length === 0 ? '먼저 모델을 입력하세요' : (defaultModel || '먼저 모델을 입력하세요')
+	);
 </script>
 
-<section
-	data-testid="add-provider-form"
-	class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-3"
->
-	<h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">
-		{UI.SETTINGS_PAGE.ADD_PROVIDER_TITLE}
-	</h3>
+<section data-testid="add-provider-form">
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>{UI.SETTINGS_PAGE.ADD_PROVIDER_TITLE}</Card.Title>
+		</Card.Header>
+		<form onsubmit={handleSubmit} novalidate>
+			<Card.Content class="flex flex-col gap-4">
+				<div class="grid gap-2">
+					<Label for="add-name">{UI.SETTINGS_PAGE.PROVIDER_NAME}</Label>
+					<Input
+						id="add-name"
+						type="text"
+						data-testid="add-name-input"
+						aria-invalid={errors.name ? 'true' : undefined}
+						bind:value={name}
+					/>
+					{#if errors.name}
+						<p data-testid="error-name" class="text-xs text-destructive">{errors.name}</p>
+					{/if}
+				</div>
 
-	<form onsubmit={handleSubmit} class="flex flex-col gap-3" novalidate>
-		<div class="flex flex-col gap-1.5">
-			<label for="add-name" class="text-sm text-gray-600 dark:text-gray-300">
-				{UI.SETTINGS_PAGE.PROVIDER_NAME}
-			</label>
-			<input
-				id="add-name"
-				type="text"
-				data-testid="add-name-input"
-				class={errors.name ? errorInputClass : inputClass}
-				bind:value={name}
-			/>
-			{#if errors.name}
-				<p data-testid="error-name" class="text-xs text-red-600 dark:text-red-400">{errors.name}</p>
-			{/if}
-		</div>
+				<div class="grid gap-2">
+					<Label for="add-base-url">{UI.SETTINGS_PAGE.PROVIDER_BASE_URL}</Label>
+					<Input
+						id="add-base-url"
+						type="url"
+						placeholder="https://api.example.com/v1"
+						data-testid="add-base-url-input"
+						aria-invalid={errors.baseURL ? 'true' : undefined}
+						bind:value={baseURL}
+					/>
+					{#if errors.baseURL}
+						<p data-testid="error-base-url" class="text-xs text-destructive">
+							{errors.baseURL}
+						</p>
+					{/if}
+				</div>
 
-		<div class="flex flex-col gap-1.5">
-			<label for="add-base-url" class="text-sm text-gray-600 dark:text-gray-300">
-				{UI.SETTINGS_PAGE.PROVIDER_BASE_URL}
-			</label>
-			<input
-				id="add-base-url"
-				type="url"
-				placeholder="https://api.example.com/v1"
-				data-testid="add-base-url-input"
-				class={errors.baseURL ? errorInputClass : inputClass}
-				bind:value={baseURL}
-			/>
-			{#if errors.baseURL}
-				<p data-testid="error-base-url" class="text-xs text-red-600 dark:text-red-400">{errors.baseURL}</p>
-			{/if}
-		</div>
+				<div class="grid gap-2">
+					<Label for="add-models">{UI.SETTINGS_PAGE.PROVIDER_MODELS}</Label>
+					<Input
+						id="add-models"
+						type="text"
+						placeholder="model-1, model-2"
+						data-testid="add-models-input"
+						aria-invalid={errors.models ? 'true' : undefined}
+						bind:value={modelsInput}
+					/>
+					{#if errors.models}
+						<p data-testid="error-models" class="text-xs text-destructive">{errors.models}</p>
+					{/if}
+				</div>
 
-		<div class="flex flex-col gap-1.5">
-			<label for="add-models" class="text-sm text-gray-600 dark:text-gray-300">
-				{UI.SETTINGS_PAGE.PROVIDER_MODELS}
-			</label>
-			<input
-				id="add-models"
-				type="text"
-				placeholder="model-1, model-2"
-				data-testid="add-models-input"
-				class={errors.models ? errorInputClass : inputClass}
-				bind:value={modelsInput}
-			/>
-			{#if errors.models}
-				<p data-testid="error-models" class="text-xs text-red-600 dark:text-red-400">{errors.models}</p>
-			{/if}
-		</div>
-
-		<div class="flex flex-col gap-1.5">
-			<label for="add-default-model" class="text-sm text-gray-600 dark:text-gray-300">
-				{UI.SETTINGS_PAGE.PROVIDER_DEFAULT_MODEL}
-			</label>
-			<select
-				id="add-default-model"
-				data-testid="add-default-model-select"
-				class={inputClass}
-				bind:value={defaultModel}
-			>
-				{#if models.length === 0}
-					<option value="" disabled>먼저 모델을 입력하세요</option>
-				{:else}
-					{#each models as model (model)}
-						<option value={model}>{model}</option>
-					{/each}
-				{/if}
-			</select>
-		</div>
-
-		<button
-			type="submit"
-			data-testid="add-submit-button"
-			class="self-start px-4 py-2 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition"
-		>
-			{UI.SETTINGS_PAGE.BUTTON_ADD}
-		</button>
-	</form>
+				<div class="grid gap-2">
+					<Label for="add-default-model">{UI.SETTINGS_PAGE.PROVIDER_DEFAULT_MODEL}</Label>
+					<Select.Root type="single" bind:value={defaultModel}>
+						<Select.Trigger
+							id="add-default-model"
+							data-testid="add-default-model-select"
+							class="w-full"
+						>
+							{defaultModelTriggerText}
+						</Select.Trigger>
+						{#if models.length > 0}
+							<Select.Content>
+								{#each models as model (model)}
+									<Select.Item value={model} label={model}>{model}</Select.Item>
+								{/each}
+							</Select.Content>
+						{/if}
+					</Select.Root>
+				</div>
+			</Card.Content>
+			<Card.Footer>
+				<Button type="submit" data-testid="add-submit-button">
+					{UI.SETTINGS_PAGE.BUTTON_ADD}
+				</Button>
+			</Card.Footer>
+		</form>
+	</Card.Root>
 </section>

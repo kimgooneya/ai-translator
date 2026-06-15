@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { UI } from '$lib/constants/ui-strings';
 	import type { GlossaryEntry } from '$lib/schemas';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
 
 	let {
 		entry,
@@ -13,50 +15,50 @@
 	} = $props();
 </script>
 
-<article
+<Card.Root
 	data-testid="glossary-entry-row"
 	data-entry-id={entry.id}
-	class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+	class="flex-row flex-wrap items-center justify-between gap-4 py-4"
 >
-	<div class="flex flex-col gap-1 min-w-0 flex-1">
+	<div class="flex flex-col gap-1 min-w-0 flex-1 px-6">
 		<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 			<span
 				data-testid="entry-source"
-				class="text-sm font-semibold text-gray-800 dark:text-gray-100 break-all"
+				class="text-sm font-semibold text-foreground break-all"
 			>
 				{entry.source}
 			</span>
-			<span class="text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
+			<span class="text-muted-foreground" aria-hidden="true">→</span>
 			<span
 				data-testid="entry-target"
-				class="text-sm text-gray-700 dark:text-gray-200 break-all"
+				class="text-sm text-muted-foreground break-all"
 			>
 				{entry.target}
 			</span>
 		</div>
 		{#if entry.note}
-			<p data-testid="entry-note" class="text-xs text-gray-500 dark:text-gray-400 break-all">
+			<p data-testid="entry-note" class="text-xs text-muted-foreground break-all">
 				{entry.note}
 			</p>
 		{/if}
 	</div>
 
-	<div class="flex items-center gap-2 shrink-0">
-		<button
-			type="button"
+	<div class="flex items-center gap-2 shrink-0 pr-6">
+		<Button
+			variant="ghost"
+			size="sm"
 			data-testid="edit-button"
 			onclick={() => onedit(entry.id)}
-			class="px-3 py-1.5 rounded-md text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition"
 		>
 			{UI.GLOSSARY_PAGE.BUTTON_EDIT}
-		</button>
-		<button
-			type="button"
+		</Button>
+		<Button
+			variant="destructive"
+			size="sm"
 			data-testid="delete-button"
 			onclick={() => ondelete(entry.id)}
-			class="px-3 py-1.5 rounded-md text-sm font-medium bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-300 transition"
 		>
 			{UI.GLOSSARY_PAGE.BUTTON_DELETE}
-		</button>
+		</Button>
 	</div>
-</article>
+</Card.Root>
