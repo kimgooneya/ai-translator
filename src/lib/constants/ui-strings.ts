@@ -44,6 +44,7 @@ export const UI = {
     PROVIDER_MODELS: "모델 (쉼표로 구분)",
     PROVIDER_DEFAULT_MODEL: "기본 모델",
     BUTTON_ADD: "추가",
+    BUTTON_CANCEL: "취소",
     NO_PROVIDERS: "설정된 provider가 없습니다.",
     // --- Provider table UI (new) ---
     COL_PROVIDER: "Provider",
