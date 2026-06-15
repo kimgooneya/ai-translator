@@ -1,7 +1,7 @@
 import { writable, type Writable } from "svelte/store";
 import type { z } from "zod";
 import { loadFromStorage, saveToStorage, removeFromStorage } from "./index";
-import { toasts } from "$lib/stores/toasts";
+import { toast } from "svelte-sonner";
 import { UI } from "$lib/constants/ui-strings";
 
 export interface PersistedWritable<T> extends Writable<T> {
@@ -32,7 +32,7 @@ export function persistedWritable<T>(
       );
       if (result.error === "quota" && lastQuotaWarningFor !== value) {
         lastQuotaWarningFor = value;
-        toasts.addToast({ type: "warning", message: UI.ERRORS.STORAGE_FULL });
+        toast.warning(UI.ERRORS.STORAGE_FULL);
       }
     } else if (result.ok) {
       lastQuotaWarningFor = undefined;

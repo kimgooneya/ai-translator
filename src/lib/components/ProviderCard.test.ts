@@ -1,7 +1,21 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/svelte";
 import ProviderCard from "$lib/components/ProviderCard.svelte";
 import type { Provider, ProviderConfig } from "$lib/schemas";
+
+// jsdom does not implement Pointer Capture API, but bits-ui's Select.Trigger
+// calls `target.hasPointerCapture(...)` in its onpointerdown handler. Polyfill
+// before any Select interaction so popover open works in tests.
+beforeAll(() => {
+  if (
+    typeof HTMLElement !== "undefined" &&
+    typeof HTMLElement.prototype.hasPointerCapture !== "function"
+  ) {
+    HTMLElement.prototype.hasPointerCapture = () => false;
+    HTMLElement.prototype.releasePointerCapture = () => {};
+    HTMLElement.prototype.setPointerCapture = () => {};
+  }
+});
 
 const presetProvider: Provider = {
   id: "openai",
@@ -27,21 +41,51 @@ const configuredPreset: ProviderConfig = {
   selectedModel: "gpt-5.4",
 };
 
+/**
+ * Helper: open the bits-ui Select popover by clicking its trigger, then return
+ * the rendered item elements. In jsdom the popover renders through a Portal
+ * attached to document.body, so we query via screen.
+ */
+async function openSelectOptions(trigger: HTMLElement): Promise<HTMLElement[]> {
+  await fireEvent.pointerDown(trigger, { button: 0 });
+  await fireEvent.pointerUp(trigger, { button: 0 });
+  await fireEvent.click(trigger);
+  const items = await screen.findAllByRole("option");
+  return items;
+}
+
+/**
+ * bits-ui commits a Select.Item selection on pointerup, not click. Fire the
+ * full pointer + click sequence to mirror a real user interaction.
+ */
+async function selectItem(item: HTMLElement): Promise<void> {
+  await fireEvent.pointerDown(item, { button: 0 });
+  await fireEvent.pointerUp(item, { button: 0 });
+  await fireEvent.click(item);
+}
+
 describe("ProviderCard", () => {
   describe("rendering", () => {
-    it("renders the provider name as a heading", () => {
+    it("renders the provider name inside the Card.Title slot", () => {
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave: vi.fn() },
       });
-      expect(screen.getByText("OpenAI")).toBeInTheDocument();
-      expect(screen.getByText("OpenAI").tagName).toBe("H3");
+      const title = screen.getByText("OpenAI");
+      expect(title).toBeInTheDocument();
+      // shadcn Card.Title renders a <div data-slot="card-title">. We assert on
+      // the structural slot rather than a specific tag name.
+      expect(title.closest('[data-slot="card-title"]')).not.toBeNull();
     });
 
-    it("shows 미설정 indicator when config is undefined", () => {
+    it("shows 미설정 indicator (Badge secondary variant) when config is undefined", () => {
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave: vi.fn() },
       });
-      expect(screen.getByText("미설정")).toBeInTheDocument();
+      const notice = screen.getByText("미설정");
+      expect(notice).toBeInTheDocument();
+      expect(notice.closest('[data-slot="badge"]')).not.toBeNull();
+      // secondary variant classes only exist when hasApiKey is false
+      expect(notice.className).toContain("bg-secondary");
     });
 
     it("shows 미설정 indicator when config has empty apiKey", () => {
@@ -56,10 +100,12 @@ describe("ProviderCard", () => {
           onsave: vi.fn(),
         },
       });
-      expect(screen.getByText("미설정")).toBeInTheDocument();
+      const notice = screen.getByText("미설정");
+      expect(notice).toBeInTheDocument();
+      expect(notice.className).toContain("bg-secondary");
     });
 
-    it("shows 설정됨 indicator when config has a non-empty apiKey", () => {
+    it("shows 설정됨 indicator (Badge default variant) when config has a non-empty apiKey", () => {
       render(ProviderCard, {
         props: {
           provider: presetProvider,
@@ -67,7 +113,12 @@ describe("ProviderCard", () => {
           onsave: vi.fn(),
         },
       });
-      expect(screen.getByText("설정됨")).toBeInTheDocument();
+      const notice = screen.getByText("설정됨");
+      expect(notice).toBeInTheDocument();
+      expect(notice.closest('[data-slot="badge"]')).not.toBeNull();
+      // default variant — bg-primary is present (not bg-secondary)
+      expect(notice.className).toContain("bg-primary");
+      expect(notice.className).not.toContain("bg-secondary");
     });
 
     it('uses type="password" for the API key input (never plaintext)', () => {
@@ -78,16 +129,17 @@ describe("ProviderCard", () => {
       expect(input.type).toBe("password");
     });
 
-    it("renders all provider models as select options", () => {
+    it("renders all provider models as Select options when opened", async () => {
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave: vi.fn() },
       });
-      const select = screen.getByTestId("model-select") as HTMLSelectElement;
-      const options = Array.from(select.options).map((o) => o.value);
-      expect(options).toEqual(["gpt-5.4", "gpt-5.4-mini"]);
+      const trigger = screen.getByTestId("model-select");
+      const items = await openSelectOptions(trigger);
+      const labels = items.map((i) => i.textContent?.trim() ?? "");
+      expect(labels).toEqual(expect.arrayContaining(["gpt-5.4", "gpt-5.4-mini"]));
     });
 
-    it("pre-fills apiKey and selectedModel from config", () => {
+    it("pre-fills apiKey from config and reflects selectedModel in the trigger", () => {
       render(ProviderCard, {
         props: {
           provider: presetProvider,
@@ -96,19 +148,18 @@ describe("ProviderCard", () => {
         },
       });
       const keyInput = screen.getByTestId("api-key-input") as HTMLInputElement;
-      const modelSelect = screen.getByTestId(
-        "model-select",
-      ) as HTMLSelectElement;
+      const trigger = screen.getByTestId("model-select");
       expect(keyInput.value).toBe("sk-stored-key");
-      expect(modelSelect.value).toBe("gpt-5.4");
+      // shadcn Select.Trigger renders the currently selected value as text.
+      expect(trigger.textContent).toContain("gpt-5.4");
     });
 
     it("defaults selectedModel to provider.defaultModel when no config", () => {
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave: vi.fn() },
       });
-      const select = screen.getByTestId("model-select") as HTMLSelectElement;
-      expect(select.value).toBe("gpt-5.4-mini");
+      const trigger = screen.getByTestId("model-select");
+      expect(trigger.textContent).toContain("gpt-5.4-mini");
     });
   });
 
@@ -129,7 +180,10 @@ describe("ProviderCard", () => {
           ondelete: vi.fn(),
         },
       });
-      expect(screen.getByTestId("delete-button")).toBeInTheDocument();
+      const btn = screen.getByTestId("delete-button");
+      expect(btn).toBeInTheDocument();
+      // shadcn destructive Button uses bg-destructive
+      expect(btn.className).toContain("bg-destructive");
     });
 
     it("does NOT render a delete button for custom providers when ondelete is omitted", () => {
@@ -171,13 +225,18 @@ describe("ProviderCard", () => {
       expect(btn.disabled).toBe(false);
     });
 
-    it("becomes enabled when the user changes the selected model", async () => {
+    it("becomes enabled when the user changes the selected model via the popover", async () => {
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave: vi.fn() },
       });
-      const select = screen.getByTestId("model-select");
+      const trigger = screen.getByTestId("model-select");
+      const items = await openSelectOptions(trigger);
+      // default is gpt-5.4-mini; click gpt-5.4 to mark dirty
+      const target = items.find(
+        (i) => i.textContent?.trim() === "gpt-5.4",
+      ) as HTMLElement;
+      await selectItem(target);
       const btn = screen.getByTestId("save-button") as HTMLButtonElement;
-      await fireEvent.change(select, { target: { value: "gpt-5.4" } });
       expect(btn.disabled).toBe(false);
     });
   });
@@ -228,14 +287,17 @@ describe("ProviderCard", () => {
       expect(onsave.mock.calls[0][0].apiKey).toBe("sk-spaces");
     });
 
-    it("respects the user-selected model when saving", async () => {
+    it("respects the user-selected model when saving (via popover)", async () => {
       const onsave = vi.fn();
       render(ProviderCard, {
         props: { provider: presetProvider, config: undefined, onsave },
       });
-      await fireEvent.change(screen.getByTestId("model-select"), {
-        target: { value: "gpt-5.4" },
-      });
+      const trigger = screen.getByTestId("model-select");
+      const items = await openSelectOptions(trigger);
+      const target = items.find(
+        (i) => i.textContent?.trim() === "gpt-5.4",
+      ) as HTMLElement;
+      await selectItem(target);
       await fireEvent.click(screen.getByTestId("save-button"));
       expect(onsave.mock.calls[0][0].selectedModel).toBe("gpt-5.4");
     });

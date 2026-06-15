@@ -2,8 +2,9 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import Nav from '$lib/components/Nav.svelte';
-	import ToastContainer from '$lib/components/ToastContainer.svelte';
-	import { toasts } from '$lib/stores/toasts';
+	import { Toaster } from '$lib/components/ui/sonner/index.js';
+	import { ModeWatcher } from 'mode-watcher';
+	import { toast } from 'svelte-sonner';
 
 	let { children } = $props();
 
@@ -15,10 +16,10 @@
 		if (typeof window === 'undefined') return;
 
 		function handleOffline(): void {
-			toasts.addToast({ type: 'warning', message: '네트워크 연결이 끊어졌습니다.' });
+			toast.warning('네트워크 연결이 끊어졌습니다.');
 		}
 		function handleOnline(): void {
-			toasts.addToast({ type: 'info', message: '네트워크가 복구되었습니다.' });
+			toast.info('네트워크가 복구되었습니다.');
 		}
 
 		window.addEventListener('offline', handleOffline);
@@ -34,11 +35,12 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+<ModeWatcher />
+<Toaster />
+
+<div class="min-h-screen bg-background text-foreground">
 	<Nav />
 	<main class="max-w-4xl mx-auto p-4">
 		{@render children()}
 	</main>
 </div>
-
-<ToastContainer />

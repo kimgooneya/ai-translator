@@ -2,7 +2,7 @@
 	import { settingsStore } from '$lib/stores/settings';
 	import { glossaryStore } from '$lib/stores/glossary';
 	import { addHistoryEntry } from '$lib/stores/history';
-	import { toasts } from '$lib/stores/toasts';
+	import { toast } from 'svelte-sonner';
 	import { getProviderById } from '$lib/providers/registry';
 	import { UI } from '$lib/constants/ui-strings';
 	import { getErrorMessage } from '$lib/constants/error-messages';
@@ -12,6 +12,7 @@
 	import type { TranslationRequest, TranslationHistoryEntry } from '$lib/schemas';
 	import TranslateControls from '$lib/components/TranslateControls.svelte';
 	import AdvancedOptions from '$lib/components/AdvancedOptions.svelte';
+	import { Textarea } from '$lib/components/ui/textarea/index.js';
 
 	function handleToggleGlossary(): void {
 		glossaryStore.update((g) => ({ ...g, enabled: !g.enabled }));
@@ -103,7 +104,7 @@
 					// code (friendly Korean mapping). Any partial result already
 					// rendered in `resultText` is intentionally kept so the user
 					// does not lose what streamed before the error.
-					toasts.addToast({ type: 'error', message: getErrorMessage(error) });
+					toast.error(getErrorMessage(error), { duration: 10000 });
 				},
 				onDone: (fullText) => {
 					if (fullText === '') return;
@@ -137,7 +138,7 @@
 		const isTxt =
 			file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain';
 		if (!isTxt) {
-			toasts.addToast({ type: 'error', message: UI.ERRORS.INVALID_FILE_TYPE });
+			toast.error(UI.ERRORS.INVALID_FILE_TYPE, { duration: 10000 });
 			input.value = '';
 			return;
 		}
@@ -157,11 +158,6 @@
 	function handleTextareaInput(): void {
 		loadedFile = null;
 	}
-
-	const sourceTextareaClass =
-		'w-full h-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 ' +
-		'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 ' +
-		'focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none';
 </script>
 
 <svelte:head>
@@ -251,14 +247,13 @@
 					</button>
 				</div>
 			{/if}
-			<textarea
-				data-testid="source-textarea"
-				placeholder={UI.TRANSLATE_PAGE.PLACEHOLDER_SOURCE}
-				class={sourceTextareaClass}
-				bind:value={sourceText}
-				oninput={handleTextareaInput}
-				style="min-height: 300px;"
-			></textarea>
+		<Textarea
+			data-testid="source-textarea"
+			placeholder={UI.TRANSLATE_PAGE.PLACEHOLDER_SOURCE}
+			bind:value={sourceText}
+			oninput={handleTextareaInput}
+			class="min-h-[300px] h-full resize-none"
+		/>
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
 					<label

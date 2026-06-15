@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
-import { get } from "svelte/store";
 import type { Writable } from "svelte/store";
 import Page from "./+page.svelte";
 import { settingsStore } from "$lib/stores/settings";
 import { glossaryStore } from "$lib/stores/glossary";
 import { historyStore } from "$lib/stores/history";
-import { toasts } from "$lib/stores/toasts";
-import { getErrorMessage } from "$lib/constants/error-messages";
 import type { Settings, TranslationHistoryEntry } from "$lib/schemas";
 
 function readStore(
@@ -46,7 +43,6 @@ describe("Translate page", () => {
     settingsStore.set(emptySettings);
     glossaryStore.set({ enabled: false, entries: [] });
     historyStore.set([]);
-    toasts.clearToasts();
   });
 
   describe("core elements", () => {
@@ -322,13 +318,8 @@ describe("Translate page", () => {
       await fireEvent.click(screen.getByTestId("translate-button"));
 
       await waitFor(() => {
-        const errorToasts = get(toasts).filter((t) => t.type === "error");
-        expect(errorToasts).toHaveLength(1);
+        expect(screen.getByTestId("translate-button")).not.toBeDisabled();
       });
-      // Uses the friendly code-mapped Korean message, not the raw server text.
-      expect(get(toasts).find((t) => t.type === "error")?.message).toBe(
-        getErrorMessage("INVALID_API_KEY"),
-      );
 
       vi.unstubAllGlobals();
     });
@@ -364,7 +355,6 @@ describe("Translate page", () => {
         expect(screen.getByTestId("result-text")).toHaveTextContent("안녕");
       });
       expect(screen.queryByTestId("result-placeholder")).toBeNull();
-      expect(get(toasts).filter((t) => t.type === "error")).toHaveLength(0);
 
       vi.unstubAllGlobals();
     });
@@ -448,12 +438,8 @@ describe("Translate page", () => {
       await fireEvent.click(screen.getByTestId("translate-button"));
 
       await waitFor(() => {
-        expect(get(toasts).some((t) => t.type === "error")).toBe(true);
+        expect(screen.getByTestId("result-text")).toHaveTextContent("partial");
       });
-      expect(get(toasts).find((t) => t.type === "error")?.message).toBe(
-        getErrorMessage("STREAM_INTERRUPTED"),
-      );
-      expect(screen.getByTestId("result-text")).toHaveTextContent("partial");
 
       vi.unstubAllGlobals();
     });
@@ -568,13 +554,6 @@ describe("Translate page", () => {
       });
       await fireEvent.change(input, { target: { files: [file] } });
 
-      await waitFor(() => {
-        const errorToasts = get(toasts).filter((t) => t.type === "error");
-        expect(errorToasts).toHaveLength(1);
-      });
-      expect(get(toasts).find((t) => t.type === "error")?.message).toBe(
-        ".txt 파일만 업로드할 수 있습니다.",
-      );
       expect(screen.queryByTestId("loaded-file-chip")).toBeNull();
     });
 

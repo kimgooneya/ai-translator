@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { toggleMode } from 'mode-watcher';
+	import Sun from '@lucide/svelte/icons/sun';
+	import Moon from '@lucide/svelte/icons/moon';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import { UI } from '$lib/constants/ui-strings';
 
 	const links = [
@@ -15,10 +19,10 @@
 	}
 </script>
 
-<nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+<nav class="bg-card text-card-foreground border-b border-border">
 	<div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-		<a href="/" class="text-lg font-bold text-gray-800 dark:text-gray-100">{UI.APP_TITLE}</a>
-		<div class="flex gap-4">
+		<a href="/" class="text-lg text-foreground font-semibold">{UI.APP_TITLE}</a>
+		<div class="flex items-center gap-4">
 			{#each links as link (link.href)}
 				<a
 					href={link.href}
@@ -26,13 +30,23 @@
 						link.href,
 						$page.url.pathname
 					)
-						? 'text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-900/30'
-						: 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100'}"
+						? 'text-foreground font-medium bg-secondary'
+						: 'text-muted-foreground hover:text-foreground'}"
 					aria-current={isActive(link.href, $page.url.pathname) ? 'page' : undefined}
 				>
 					{link.label}
 				</a>
 			{/each}
+			<Button
+				variant="outline"
+				size="icon"
+				onclick={toggleMode}
+				aria-label={UI.NAV.THEME_TOGGLE}
+				data-testid="theme-toggle"
+			>
+				<Sun class="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+				<Moon class="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+			</Button>
 		</div>
 	</div>
 </nav>

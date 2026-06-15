@@ -6,6 +6,7 @@ export const UI = {
     SETTINGS: "설정",
     GLOSSARY: "용어집",
     HISTORY: "기록",
+    THEME_TOGGLE: "다크모드 전환",
   },
   TRANSLATE_PAGE: {
     PLACEHOLDER_SOURCE: "번역할 텍스트를 입력하세요",
