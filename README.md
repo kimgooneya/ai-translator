@@ -1,128 +1,132 @@
-# AI 번역기
+# AI Translator
 
-SvelteKit + TypeScript 기반 개인용 AI 번역기. OpenAI 호환 API로 다중 provider 지원, BYOK, 스트리밍, 용어집, 히스토리.
+A privacy-first AI translation app built with SvelteKit. Bring your own API key (BYOK) — keys never leave your browser's localStorage. Supports multiple AI providers, real-time streaming, custom glossaries, and translation history.
 
-## 기능
+프라이버시 중심 AI 번역기. API 키는 브라우저 localStorage에만 저장되고 서버에 전송되지 않습니다.
 
-- 다중 AI provider 지원 (OpenAI, Gemini, Qwen, Zhipu, DeepSeek + 커스텀)
-- BYOK (Bring Your Own Key) — 브라우저 localStorage에 API 키 저장
-- 실시간 스트리밍 번역
-- 사용자 정의 번역 지시 (프롬프트)
-- 용어집 (glossary) — 특정 용어 번역 고정
-- 번역 히스토리 (최대 100건)
-- 소스 언어 자동 감지
-- 다크모드
+## Features
 
-## 시작하기
+- **Multi-provider support** — OpenAI, Google Gemini, Qwen, Z.AI (Zhipu), DeepSeek, and custom OpenAI-compatible endpoints
+- **BYOK (Bring Your Own Key)** — API keys stored in browser localStorage, never sent to any server (except the same-origin proxy during translation requests)
+- **Real-time streaming** — See translations appear token-by-token via SSE
+- **Custom glossary** — Lock specific term translations
+- **Translation history** — Last 100 translations, with detail view
+- **Auto language detection** — Source language auto-detected from input text
+- **Dark mode** — System-aware with manual toggle, no flash of unstyled content (FOUC)
+- **Custom prompts** — Override the default translation instruction per request
+- **File upload** — Translate `.txt` files directly
 
-### 요구사항
+## Tech Stack
 
-- Node.js 20+ (Vercel 배포 시)
+| Layer | Technology |
+|-------|-----------|
+| Framework | SvelteKit 2 + Svelte 5 (runes mode) |
+| Styling | Tailwind CSS 3 + shadcn-svelte |
+| AI Integration | OpenAI SDK (custom baseURL for multi-provider) |
+| State | Svelte stores + localStorage persistence |
+| Testing | Vitest (375 tests) + Playwright (57 tests) |
+| Deployment | Vercel (@sveltejs/adapter-vercel) |
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 20+
 - npm 10+
 
-### 설치
+### Installation
 
 ```bash
+git clone https://github.com/kimgooneya/ai-translator.git
+cd ai-translator
 npm install
 ```
 
-### 개발 서버
+### Development
 
 ```bash
 npm run dev
 ```
 
-브라우저에서 http://localhost:5173 접속.
+Open http://localhost:5173 in your browser.
 
-### 테스트
-
-```bash
-# 단위 테스트
-npm run test
-
-# E2E 테스트 (Chromium 자동 다운로드)
-npm run test:e2e
-```
-
-### 빌드
+### Testing
 
 ```bash
-npm run build
-npm run preview  # 로컬에서 빌드 결과 확인
+npm run test          # Unit tests (Vitest)
+npm run test:e2e      # E2E tests (Playwright)
+npm run check         # Type checking (svelte-check)
+npm run build         # Production build
 ```
 
-## 사용법
+## Usage
 
-1. **설정 페이지** (/settings)에서 사용할 provider의 API 키 입력
-2. **번역 페이지** (/)에서 소스 텍스트 입력, 대상 언어 선택
-3. (선택) 고급 옵션에서 커스텀 프롬프트, 용어집 활성화
-4. "번역하기" 클릭 → 결과가 스트리밍으로 표시
-5. 번역 기록은 /history에서 확인
+1. **Add API key** — Go to /settings, select your provider, paste your API key
+2. **Translate** — Go to /, enter source text, select target language, click Translate
+3. **(Optional) Advanced options** — Enable custom prompt or glossary
+4. **History** — Past translations saved at /history
 
-## API 키 발급
+## Supported Providers
 
-이 앱은 BYOK 방식입니다. 서버 환경 변수 대신 UI(설정 페이지)에서 API 키를 입력하세요.
-
-| Provider         | 발급 URL                                    |
-| ---------------- | ------------------------------------------- |
-| OpenAI           | https://platform.openai.com/api-keys        |
-| Google Gemini    | https://aistudio.google.com/apikey          |
+| Provider | Get API Key |
+|----------|------------|
+| OpenAI | https://platform.openai.com/api-keys |
+| Google Gemini | https://aistudio.google.com/apikey |
 | Qwen (DashScope) | https://dashscope.console.aliyun.com/apiKey |
-| Z.AI (Zhipu)     | https://open.bigmodel.cn/usercenter/apikeys |
-| DeepSeek         | https://platform.deepseek.com/api_keys      |
+| Z.AI (Zhipu) | https://open.bigmodel.cn/usercenter/apikeys |
+| DeepSeek | https://platform.deepseek.com/api_keys |
 
-⚠️ **Z.AI (Zhipu)**: BigModel은 전통적으로 JWT 인증을 사용합니다. 최신 OpenAI 호환 모드(`https://open.bigmodel.cn/api/paas/v4`)는 Bearer API key를 지원하지만, 401 오류 발생 시 Zhipu SDK 또는 수동 JWT signing이 필요할 수 있습니다.
+## Deployment (Vercel)
 
-## 배포 (Vercel)
+This project uses @sveltejs/adapter-vercel.
 
-이 프로젝트는 `@sveltejs/adapter-vercel`을 사용합니다.
-
-### 옵션 A: Vercel CLI
+### Option A: Vercel CLI
 
 ```bash
 npm i -g vercel
-vercel  # preview 배포
-vercel --prod  # production 배포
+vercel          # Preview deploy
+vercel --prod   # Production deploy
 ```
 
-### 옵션 B: Git 연동
+### Option B: Git Integration
 
-1. GitHub/GitLab에 저장소 연결
-2. Vercel 대시보드에서 "New Project" → 저장소 선택
-3. Framework Preset: SvelteKit (자동 감지)
-4. Deploy 클릭
+1. Push your repository to GitHub
+2. In Vercel dashboard: New Project, select your repo
+3. Framework Preset: SvelteKit (auto-detected)
+4. Click Deploy
 
-**주의**: Vercel Hobby plan serverless function timeout은 10초입니다. 느린 provider 응답 시 첫 토큰이 10초 내 도달해야 합니다. Pro plan(60초) 이상 권장.
-
-## 아키텍처
-
-- **프론트엔드**: SvelteKit 2 + Svelte 5 (runes mode)
-- **스타일링**: Tailwind CSS 3
-- **AI 통합**: OpenAI SDK (custom baseURL로 다중 provider 처리)
-- **상태**: Svelte stores + localStorage 영속
-- **테스트**: Vitest (단위) + Playwright (E2E), TDD
-- **배포**: Vercel
-
-### 핵심 디렉토리
+## Project Structure
 
 ```
 src/
   lib/
-    components/    # Svelte 컴포넌트
-    constants/     # UI 문자열, 언어 목록, 에러 메시지
-    detect/        # 언어 자동 감지
-    providers/     # Provider registry, 번역 로직
-    schemas/       # Zod 스키마 + TypeScript 타입
-    storage/       # localStorage 영속 유틸리티
-    stores/        # Svelte stores (settings, glossary, history, toasts)
-    streaming/     # SSE 스트림 파서
+    components/          # Svelte components (shadcn-svelte based)
+    components/ui/       # Vendored shadcn-svelte primitives
+    constants/           # UI strings, language list, error messages
+    detect/              # Language auto-detection
+    providers/           # Provider registry, translation logic
+    schemas/             # Zod schemas + TypeScript types
+    storage/             # localStorage persistence utilities
+    stores/              # Svelte stores (settings, glossary, history)
+    streaming/           # SSE stream parser
+    utils.ts             # cn() class merge helper
   routes/
-    api/translate/ # POST /api/translate (스트리밍 API)
-    settings/      # /settings
-    glossary/      # /용어집
-    history/       # /history
+    api/translate/       # POST /api/translate (streaming endpoint)
+    settings/            # /settings
+    glossary/            # /glossary
+    history/             # /history
 ```
 
-## 라이선스
+## Privacy
 
-개인 사용 목적.
+- API keys stored in browser localStorage only — never sent to analytics servers
+- Translation requests go through a same-origin server proxy (POST /api/translate)
+- No telemetry, no tracking, no analytics
+
+## Contributing
+
+Contributions welcome! See CONTRIBUTING.md for guidelines.
+
+## License
+
+MIT
