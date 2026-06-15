@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/svelte";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import { tick } from "svelte";
 import type { TranslationHistoryEntry } from "$lib/schemas";
@@ -327,8 +327,20 @@ describe("History page", () => {
       await fireEvent.click(screen.getByTestId("history-detail-button"));
       expect(screen.getByTestId("history-detail-modal")).toBeInTheDocument();
 
-      await fireEvent.click(screen.getByTestId("history-detail-backdrop"));
-      expect(screen.queryByTestId("history-detail-modal")).toBeNull();
+      // bits-ui's DismissibleLayer attaches its document-level pointerdown
+      // listener via afterSleep(1) — a macrotask after open. Wait a tick so
+      // the listener is active before firing the dismiss event. Its
+      // isClickTrulyOutside() check also compares clientX/clientY against the
+      // content's rect; jsdom reports all rects as 0,0,0,0 so we pass negative
+      // coords to land truly outside the zero-rect.
+      await new Promise((r) => setTimeout(r, 10));
+      await fireEvent.pointerDown(screen.getByTestId("history-detail-backdrop"), {
+        clientX: -100,
+        clientY: -100,
+      });
+      await waitFor(() => {
+        expect(screen.queryByTestId("history-detail-modal")).toBeNull();
+      });
     });
 
     it("closes the modal when Escape is pressed", async () => {
@@ -337,8 +349,13 @@ describe("History page", () => {
       await fireEvent.click(screen.getByTestId("history-detail-button"));
       expect(screen.getByTestId("history-detail-modal")).toBeInTheDocument();
 
-      await fireEvent.keyDown(window, { key: "Escape" });
-      expect(screen.queryByTestId("history-detail-modal")).toBeNull();
+      // bits-ui's escape-keydown listener is registered on document (not
+      // window), so dispatch on document.body to match real keyboard event
+      // bubbling.
+      await fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => {
+        expect(screen.queryByTestId("history-detail-modal")).toBeNull();
+      });
     });
   });
 

@@ -145,7 +145,7 @@ test.describe("Translate page", () => {
             {
               providerId: "openai",
               apiKey: "sk-e2e-key",
-              selectedModel: "gpt-4o-mini",
+              selectedModel: "gpt-5.4-mini",
             },
           ],
           activeProviderId: "openai",
@@ -156,11 +156,22 @@ test.describe("Translate page", () => {
 
     await page.goto("/");
 
-    const modelSelect = page.getByTestId("model-select");
-    await expect(modelSelect.locator("option")).toHaveCount(2);
-    const texts = await modelSelect.locator("option").allTextContents();
-    expect(texts).toContain("gpt-4o");
-    expect(texts).toContain("gpt-4o-mini");
+    // bits-ui Select renders a <button> trigger (carrying the testid) +
+    // opens a Portal-attached popover with `role="option"` items — NOT a
+    // native <select> with <option> children. Click the trigger to open,
+    // then enumerate options via role.
+    const modelTrigger = page.getByTestId("model-select");
+    await modelTrigger.click();
+
+    const options = page.locator('[role="option"]');
+    await expect(options).toHaveCount(4);
+    // bits-ui Item renders text with surrounding whitespace; trim before
+    // comparing so the assertion is against the model name itself.
+    const texts = (await options.allTextContents()).map((t) => t.trim());
+    expect(texts).toContain("gpt-5.5");
+    expect(texts).toContain("gpt-5.4");
+    expect(texts).toContain("gpt-5.4-mini");
+    expect(texts).toContain("gpt-5.4-nano");
   });
 
   test("clicking translate sends POST to /api/translate with correct body", async ({
@@ -174,7 +185,7 @@ test.describe("Translate page", () => {
             {
               providerId: "openai",
               apiKey: "sk-e2e-key",
-              selectedModel: "gpt-4o-mini",
+              selectedModel: "gpt-5.4-mini",
             },
           ],
           activeProviderId: "openai",
@@ -206,7 +217,7 @@ test.describe("Translate page", () => {
       targetLang: "ko",
       providerId: "openai",
       apiKey: "sk-e2e-key",
-      model: "gpt-4o-mini",
+      model: "gpt-5.4-mini",
     });
   });
 
@@ -219,14 +230,17 @@ test.describe("Translate page", () => {
 
   test("source language select defaults to 자동 감지", async ({ page }) => {
     await page.goto("/");
-    const select = page.getByTestId("source-lang-select");
-    await expect(select).toHaveValue("auto");
+    // bits-ui Select.Trigger renders a <button> that displays the bound
+    // value's label as text content (no native `.value` API). Assert on the
+    // rendered text instead.
+    const trigger = page.getByTestId("source-lang-select");
+    await expect(trigger).toContainText("자동 감지");
   });
 
   test("target language select defaults to ko", async ({ page }) => {
     await page.goto("/");
-    const select = page.getByTestId("target-lang-select");
-    await expect(select).toHaveValue("ko");
+    const trigger = page.getByTestId("target-lang-select");
+    await expect(trigger).toContainText("한국어");
   });
 
   test.describe("streaming SSE response", () => {
@@ -238,7 +252,7 @@ test.describe("Translate page", () => {
             {
               providerId: "openai",
               apiKey: "sk-e2e-key",
-              selectedModel: "gpt-4o-mini",
+              selectedModel: "gpt-5.4-mini",
             },
           ],
           activeProviderId: "openai",
@@ -311,7 +325,7 @@ test.describe("Translate page", () => {
       expect(parsed).toHaveLength(1);
       expect(parsed[0].response).toBe("안녕");
       expect(parsed[0].providerName).toBe("OpenAI");
-      expect(parsed[0].modelName).toBe("gpt-4o-mini");
+      expect(parsed[0].modelName).toBe("gpt-5.4-mini");
       expect(parsed[0].request.sourceText).toBe("hello");
     });
 
@@ -332,11 +346,12 @@ test.describe("Translate page", () => {
       await page.getByTestId("source-textarea").fill("hello");
       await page.getByTestId("translate-button").click();
 
-      const toast = page.getByTestId("toast");
-      await expect(toast).toHaveAttribute("data-toast-type", "error");
-      await expect(page.getByTestId("toast-message")).toContainText(
-        "API 키를 확인하세요",
+      // Sonner DOM: <li data-sonner-toast data-type="error">…<div data-title>
+      const errorToast = page.locator(
+        '[data-sonner-toast][data-type="error"]',
       );
+      await expect(errorToast).toBeVisible({ timeout: 5000 });
+      await expect(errorToast).toContainText("API 키를 확인하세요");
       await expect(page.getByTestId("result-text")).toBeHidden();
     });
 
@@ -360,7 +375,10 @@ test.describe("Translate page", () => {
       await page.getByTestId("source-textarea").fill("hello");
       await page.getByTestId("translate-button").click();
 
-      await expect(page.getByTestId("toast-message")).toContainText("중단");
+      const errorToast = page.locator(
+        '[data-sonner-toast][data-type="error"]',
+      );
+      await expect(errorToast).toContainText("중단", { timeout: 5000 });
       await expect(page.getByTestId("result-text")).toHaveText("partial");
     });
   });

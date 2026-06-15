@@ -19,6 +19,19 @@ function readStore(
   return value;
 }
 
+// bits-ui Select renders a <button> trigger + popover (Portal). Opening the
+// popover requires the full pointer sequence (not just click), because
+// bits-ui listens for onpointerdown on the trigger. Items render with
+// role="option" inside the Portal attached to document.body.
+async function openSelectOptions(
+  trigger: HTMLElement,
+): Promise<HTMLElement[]> {
+  await fireEvent.pointerDown(trigger, { button: 0 });
+  await fireEvent.pointerUp(trigger, { button: 0 });
+  await fireEvent.click(trigger);
+  return await screen.findAllByRole("option");
+}
+
 const emptySettings: Settings = {
   providers: [],
   activeProviderId: null,
@@ -61,22 +74,20 @@ describe("Translate page", () => {
       );
     });
 
-    it("renders the source language select with 자동 감지 first", () => {
+    it("renders the source language select with 자동 감지 first", async () => {
       render(Page);
-      const select = screen.getByTestId(
-        "source-lang-select",
-      ) as HTMLSelectElement;
-      expect(select.options[0].value).toBe("auto");
-      expect(select.options[0].textContent).toBe("자동 감지");
-      expect(select.value).toBe("auto");
+      const trigger = screen.getByTestId("source-lang-select");
+      // shadcn Select.Trigger renders the selected language name as text
+      expect(trigger.textContent).toContain("자동 감지");
+      const items = await openSelectOptions(trigger);
+      expect(items[0].textContent?.trim()).toBe("자동 감지");
     });
 
     it("renders the target language select defaulting to ko", () => {
       render(Page);
-      const select = screen.getByTestId(
-        "target-lang-select",
-      ) as HTMLSelectElement;
-      expect(select.value).toBe("ko");
+      const trigger = screen.getByTestId("target-lang-select");
+      // shadcn Select.Trigger shows the language name; "ko" → "한국어"
+      expect(trigger.textContent).toContain("한국어");
     });
 
     it("renders the translate button with Korean label", () => {
@@ -166,35 +177,38 @@ describe("Translate page", () => {
       settingsStore.set(configuredSettings);
       render(Page);
       await tick();
-      const select = screen.getByTestId("model-select") as HTMLSelectElement;
-      const options = Array.from(select.options).map((o) => o.value);
-      expect(options).toContain("gpt-5.4");
-      expect(options).toContain("gpt-5.4-mini");
-      expect(select.value).toBe("gpt-5.4-mini");
+      const trigger = screen.getByTestId("model-select");
+      const items = await openSelectOptions(trigger);
+      const labels = items.map((i) => i.textContent?.trim() ?? "");
+      expect(labels).toContain("gpt-5.4");
+      expect(labels).toContain("gpt-5.4-mini");
+      expect(trigger.textContent).toContain("gpt-5.4-mini");
     });
   });
 
   describe("advanced options", () => {
     it("is collapsed by default (no custom prompt visible)", () => {
       render(Page);
-      expect(screen.queryByTestId("custom-prompt-input")).toBeNull();
-      expect(screen.queryByTestId("glossary-toggle")).toBeNull();
+      // Collapsible.Content stays in the DOM with a `hidden` attribute when
+      // collapsed, so queryByTestId finds it — assert visibility instead.
+      expect(screen.queryByTestId("custom-prompt-input")).not.toBeVisible();
+      expect(screen.queryByTestId("glossary-toggle")).not.toBeVisible();
     });
 
     it("expands to show custom prompt and glossary toggle on click", async () => {
       render(Page);
       await fireEvent.click(screen.getByTestId("advanced-options-toggle"));
-      expect(screen.getByTestId("custom-prompt-input")).toBeInTheDocument();
-      expect(screen.getByTestId("glossary-toggle")).toBeInTheDocument();
+      expect(screen.getByTestId("custom-prompt-input")).toBeVisible();
+      expect(screen.getByTestId("glossary-toggle")).toBeVisible();
     });
 
     it("collapses again on second click", async () => {
       render(Page);
       const toggle = screen.getByTestId("advanced-options-toggle");
       await fireEvent.click(toggle);
-      expect(screen.getByTestId("custom-prompt-input")).toBeInTheDocument();
+      expect(screen.getByTestId("custom-prompt-input")).toBeVisible();
       await fireEvent.click(toggle);
-      expect(screen.queryByTestId("custom-prompt-input")).toBeNull();
+      expect(screen.queryByTestId("custom-prompt-input")).not.toBeVisible();
     });
 
     it("shows glossary entry count", async () => {
@@ -214,21 +228,20 @@ describe("Translate page", () => {
       glossaryStore.set({ enabled: true, entries: [] });
       render(Page);
       await fireEvent.click(screen.getByTestId("advanced-options-toggle"));
-      const checkbox = screen.getByTestId(
-        "glossary-toggle",
-      ) as HTMLInputElement;
-      expect(checkbox.checked).toBe(true);
+      const toggle = screen.getByTestId("glossary-toggle");
+      // shadcn Switch renders a <button role="switch">; checked state is
+      // exposed via aria-checked, not an <input>.checked property.
+      expect(toggle).toHaveAttribute("aria-checked", "true");
     });
 
     it("toggling glossary updates the store", async () => {
       render(Page);
       await fireEvent.click(screen.getByTestId("advanced-options-toggle"));
-      const checkbox = screen.getByTestId(
-        "glossary-toggle",
-      ) as HTMLInputElement;
-      expect(checkbox.checked).toBe(false);
-      await fireEvent.click(checkbox);
-      expect(checkbox.checked).toBe(true);
+      const toggle = screen.getByTestId("glossary-toggle");
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      await fireEvent.click(toggle);
+      await tick();
+      expect(toggle).toHaveAttribute("aria-checked", "true");
     });
   });
 

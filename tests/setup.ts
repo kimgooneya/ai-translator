@@ -42,6 +42,32 @@ if (!globalThis.matchMedia) {
   });
 }
 
+// jsdom does not implement ResizeObserver, but bits-ui's ScrollArea (used by
+// HistoryList) instantiates one in a $effect. Polyfill with a no-op stub so
+// rendering components that contain ScrollArea doesn't throw. Real browsers
+// are unaffected.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+}
+
+// jsdom does not implement the Pointer Capture API, but bits-ui's Select.Trigger
+// calls `target.hasPointerCapture(...)` in its onpointerdown handler. Polyfill
+// globally so any test that interacts with a shadcn Select works without
+// per-file setup.
+if (
+  typeof HTMLElement !== "undefined" &&
+  typeof HTMLElement.prototype.hasPointerCapture !== "function"
+) {
+  HTMLElement.prototype.hasPointerCapture = () => false;
+  HTMLElement.prototype.releasePointerCapture = () => {};
+  HTMLElement.prototype.setPointerCapture = () => {};
+}
+
 // jsdom lacks the Web Animations API used by Svelte 5 `transition:*` directives.
 // Returning an immediately-resolving fake lets outro transitions complete in
 // tests without throwing (real browsers are unaffected).
