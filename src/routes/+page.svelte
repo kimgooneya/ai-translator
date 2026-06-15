@@ -13,6 +13,7 @@
 	import TranslateControls from '$lib/components/TranslateControls.svelte';
 	import AdvancedOptions from '$lib/components/AdvancedOptions.svelte';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
+	import { extractTextFromFile, UnsupportedFileTypeError } from '$lib/file/extractText';
 
 	function handleToggleGlossary(): void {
 		glossaryStore.update((g) => ({ ...g, enabled: !g.enabled }));
@@ -130,25 +131,28 @@
 		abortController?.abort();
 	}
 
-	function handleFileUpload(event: Event): void {
+	async function handleFileUpload(event: Event): Promise<void> {
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
 
-		const isTxt =
-			file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain';
-		if (!isTxt) {
-			toast.error(UI.ERRORS.INVALID_FILE_TYPE, { duration: 10000 });
-			input.value = '';
-			return;
-		}
-
-		const reader = new FileReader();
-		reader.onload = () => {
-			loadedFile = { name: file.name, content: reader.result as string };
+		try {
+			const content = await extractTextFromFile(file);
+			if (content.trim() === '') {
+				toast.error(UI.ERRORS.PDF_NO_TEXT, { duration: 10000 });
+				input.value = '';
+				return;
+			}
+			loadedFile = { name: file.name, content };
 			sourceText = '';
-		};
-		reader.readAsText(file);
+		} catch (err) {
+			if (err instanceof UnsupportedFileTypeError) {
+				toast.error(UI.ERRORS.INVALID_FILE_TYPE, { duration: 10000 });
+			} else {
+				toast.error(UI.ERRORS.PDF_EXTRACTION_FAILED, { duration: 10000 });
+			}
+			input.value = '';
+		}
 	}
 
 	function handleRemoveFile(): void {
@@ -275,7 +279,7 @@
 						id="file-upload"
 						data-testid="file-upload-input"
 						type="file"
-						accept=".txt,text/plain"
+						accept=".txt,.pdf,text/plain,application/pdf"
 						class="hidden"
 						onchange={handleFileUpload}
 					/>

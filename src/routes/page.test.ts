@@ -7,6 +7,22 @@ import { settingsStore } from "$lib/stores/settings";
 import { glossaryStore } from "$lib/stores/glossary";
 import { historyStore } from "$lib/stores/history";
 import type { Settings, TranslationHistoryEntry } from "$lib/schemas";
+import { extractTextFromFile, UnsupportedFileTypeError } from "$lib/file/extractText";
+
+const mocks = vi.hoisted(() => {
+	class UnsupportedFileTypeError extends Error {
+		constructor(message: string) {
+			super(message);
+			this.name = "UnsupportedFileTypeError";
+		}
+	}
+	return {
+		extractTextFromFile: vi.fn(),
+		UnsupportedFileTypeError,
+	};
+});
+
+vi.mock("$lib/file/extractText", () => mocks);
 
 function readStore(
   store: Writable<TranslationHistoryEntry[]>,
@@ -56,6 +72,17 @@ describe("Translate page", () => {
     settingsStore.set(emptySettings);
     glossaryStore.set({ enabled: false, entries: [] });
     historyStore.set([]);
+    vi.mocked(extractTextFromFile).mockReset();
+    vi.mocked(extractTextFromFile).mockImplementation(async (file: File) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (ext === "txt" || file.type === "text/plain") {
+        return file.text();
+      }
+      if (ext === "pdf" || file.type === "application/pdf") {
+        return "";
+      }
+      throw new UnsupportedFileTypeError(`Unsupported: ${file.name}`);
+    });
   });
 
   describe("core elements", () => {
@@ -557,17 +584,19 @@ describe("Translate page", () => {
       });
     });
 
-    it("shows an error toast and does not load non-txt files", async () => {
+    it("does not load unsupported file types", async () => {
       render(Page);
       const input = screen.getByTestId(
         "file-upload-input",
       ) as HTMLInputElement;
-      const file = new File(["fake pdf content"], "doc.pdf", {
-        type: "application/pdf",
+      const file = new File(["data"], "doc.docx", {
+        type: "application/octet-stream",
       });
       await fireEvent.change(input, { target: { files: [file] } });
 
-      expect(screen.queryByTestId("loaded-file-chip")).toBeNull();
+      await waitFor(() => {
+        expect(screen.queryByTestId("loaded-file-chip")).toBeNull();
+      });
     });
 
     it("removes the file chip when the remove button is clicked", async () => {
@@ -639,6 +668,76 @@ describe("Translate page", () => {
       expect(body.sourceText).toBe("file content to translate");
 
       vi.unstubAllGlobals();
+    });
+
+    it("shows a file chip when PDF is uploaded", async () => {
+      vi.mocked(extractTextFromFile).mockResolvedValue("pdf extracted text");
+      render(Page);
+      const input = screen.getByTestId(
+        "file-upload-input",
+      ) as HTMLInputElement;
+      const file = new File([new ArrayBuffer(8)], "doc.pdf", {
+        type: "application/pdf",
+      });
+      await fireEvent.change(input, { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded-file-chip")).toHaveTextContent(
+          "doc.pdf",
+        );
+      });
+      expect(screen.getByTestId("source-textarea")).toHaveValue("");
+    });
+
+    it("sends PDF content as sourceText when translating", async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response("data: [DONE]\n\n", {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+      vi.stubGlobal("fetch", mockFetch);
+      vi.mocked(extractTextFromFile).mockResolvedValue(
+        "pdf text for translation",
+      );
+
+      settingsStore.set(configuredSettings);
+      render(Page);
+      const input = screen.getByTestId(
+        "file-upload-input",
+      ) as HTMLInputElement;
+      const file = new File([new ArrayBuffer(8)], "doc.pdf", {
+        type: "application/pdf",
+      });
+      await fireEvent.change(input, { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("loaded-file-chip")).toBeInTheDocument();
+      });
+      await fireEvent.click(screen.getByTestId("translate-button"));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [, init] = mockFetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(body.sourceText).toBe("pdf text for translation");
+
+      vi.unstubAllGlobals();
+    });
+
+    it("does not load PDF with no extractable text", async () => {
+      vi.mocked(extractTextFromFile).mockResolvedValue("");
+      render(Page);
+      const input = screen.getByTestId(
+        "file-upload-input",
+      ) as HTMLInputElement;
+      const file = new File([new ArrayBuffer(8)], "scanned.pdf", {
+        type: "application/pdf",
+      });
+      await fireEvent.change(input, { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("loaded-file-chip")).toBeNull();
+      });
     });
   });
 });
