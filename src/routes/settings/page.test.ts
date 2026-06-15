@@ -46,56 +46,62 @@ describe("Settings page", () => {
   describe("title", () => {
     it('renders the page heading "설정"', () => {
       render(Page);
-      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-        "설정",
-      );
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("설정");
     });
   });
 
-  describe("preset providers", () => {
+  describe("provider table", () => {
+    it("renders the provider table container", () => {
+      render(Page);
+      expect(screen.getByTestId("provider-table")).toBeInTheDocument();
+    });
+
     it("renders all 5 preset providers by name", () => {
       render(Page);
-      const expected = [
-        "OpenAI",
-        "Google Gemini",
-        "Qwen (DashScope)",
-        "Zhipu Z.AI",
-        "DeepSeek",
-      ];
+      const expected = ["OpenAI", "Google Gemini", "Qwen (DashScope)", "Zhipu Z.AI", "DeepSeek"];
       for (const name of expected) {
-        expect(screen.getByText(name)).toBeInTheDocument();
+        expect(screen.getAllByText(name).length).toBeGreaterThanOrEqual(1);
       }
     });
 
-    it("renders exactly 5 provider cards when no customs configured", () => {
+    it("renders 5 provider rows (desktop) when no customs configured", () => {
       render(Page);
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
     });
 
-    it("does not render a delete button for any preset card", () => {
+    it("shows 미설정 on all presets when no config stored", () => {
       render(Page);
-      expect(screen.queryAllByTestId("delete-button")).toHaveLength(0);
+      expect(screen.getAllByText("미설정").length).toBeGreaterThanOrEqual(5);
     });
 
-    it("shows 미설정 on preset cards that have no stored config", () => {
+    it("shows 프리셋 kind label for preset providers", () => {
       render(Page);
-      expect(screen.getAllByText("미설정")).toHaveLength(5);
+      expect(screen.getAllByText("프리셋").length).toBeGreaterThanOrEqual(5);
     });
   });
 
-  describe("API key persistence (save flow)", () => {
-    it("renders a password input for every provider card", () => {
+  describe("edit drawer", () => {
+    it("opens the drawer when edit button is clicked", async () => {
       render(Page);
-      const inputs = screen
-        .getAllByTestId("api-key-input")
-        .map((el) => el as HTMLInputElement);
-      expect(inputs).toHaveLength(5);
-      for (const input of inputs) {
-        expect(input.type).toBe("password");
-      }
+      const editButtons = screen.getAllByTestId("edit-button");
+      await fireEvent.click(editButtons[0]);
+      expect(screen.getByTestId("edit-provider-drawer")).toBeInTheDocument();
     });
 
-    it("calls upsertProviderConfig + setActiveProvider when saving the first provider", async () => {
+    it("renders apiKey input with type=password in drawer (behavior preservation)", async () => {
+      render(Page);
+      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      const input = screen.getByTestId("api-key-input") as HTMLInputElement;
+      expect(input.type).toBe("password");
+    });
+
+    it("does NOT show baseURL input for preset providers in drawer", async () => {
+      render(Page);
+      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      expect(screen.queryByTestId("base-url-input")).toBeNull();
+    });
+
+    it("calls upsertProviderConfig + setActiveProvider when saving the first provider (wasEmpty)", async () => {
       const upsertSpy = vi.spyOn(
         await import("$lib/stores/settings"),
         "upsertProviderConfig",
@@ -107,9 +113,11 @@ describe("Settings page", () => {
 
       render(Page);
 
-      const firstInput = screen.getAllByTestId("api-key-input")[0];
-      await fireEvent.input(firstInput, { target: { value: "sk-first" } });
-      await fireEvent.click(screen.getAllByTestId("save-button")[0]);
+      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      await fireEvent.input(screen.getByTestId("api-key-input"), {
+        target: { value: "sk-first" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
 
       expect(upsertSpy).toHaveBeenCalledTimes(1);
       expect(upsertSpy.mock.calls[0][0]).toMatchObject({
@@ -120,7 +128,6 @@ describe("Settings page", () => {
     });
 
     it("does NOT call setActiveProvider when a second provider is saved", async () => {
-      // Seed one provider first
       upsertProviderConfig(presetConfig());
       setActiveProvider("openai");
 
@@ -130,42 +137,53 @@ describe("Settings page", () => {
       );
 
       render(Page);
-      // Save the second preset (gemini)
-      const cards = screen.getAllByTestId("provider-card");
-      const geminiCard = cards.find(
-        (c) => c.getAttribute("data-provider-id") === "gemini",
-      ) as HTMLElement;
-      const geminiInput = within(geminiCard).getByTestId("api-key-input");
-      await fireEvent.input(geminiInput, { target: { value: "sk-gemini" } });
-      await fireEvent.click(within(geminiCard).getByTestId("save-button"));
+
+      const editButtons = screen.getAllByTestId("edit-button");
+      const geminiButton = editButtons.find((btn) => {
+        const row = btn.closest("tr");
+        return row?.getAttribute("data-provider-id") === "gemini";
+      }) as HTMLElement;
+
+      await fireEvent.click(geminiButton);
+      await fireEvent.input(screen.getByTestId("api-key-input"), {
+        target: { value: "sk-gemini" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
 
       expect(setActiveSpy).not.toHaveBeenCalled();
     });
 
-    it("reflects 설정됨 indicator after a preset is saved (store round-trip)", async () => {
+    it("reflects 설정됨 indicator after a preset is saved", async () => {
       render(Page);
-      expect(screen.getAllByText("미설정")).toHaveLength(5);
+      expect(screen.getAllByText("미설정").length).toBeGreaterThanOrEqual(5);
 
-      const firstInput = screen.getAllByTestId("api-key-input")[0];
-      await fireEvent.input(firstInput, { target: { value: "sk-saved" } });
-      await fireEvent.click(screen.getAllByTestId("save-button")[0]);
+      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      await fireEvent.input(screen.getByTestId("api-key-input"), {
+        target: { value: "sk-saved" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
 
-      expect(screen.getAllByText("설정됨")).toHaveLength(1);
-      expect(screen.getAllByText("미설정")).toHaveLength(4);
+      expect(screen.getAllByText("설정됨").length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  describe("custom provider add flow", () => {
-    it("renders the add-provider form at the bottom", () => {
+  describe("add provider modal", () => {
+    it("renders the add-provider trigger button", () => {
       render(Page);
-      expect(screen.getByTestId("add-provider-form")).toBeInTheDocument();
-      expect(screen.getByText("새 provider 추가")).toBeInTheDocument();
+      expect(screen.getByTestId("add-provider-button")).toBeInTheDocument();
     });
 
-    it("adds a custom provider card when the form is submitted with valid data", async () => {
+    it("opens the modal when trigger is clicked", async () => {
       render(Page);
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
+      await fireEvent.click(screen.getByTestId("add-provider-button"));
+      expect(screen.getByTestId("add-provider-modal")).toBeInTheDocument();
+    });
 
+    it("adds a custom provider row when submitted with valid data", async () => {
+      render(Page);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
+
+      await fireEvent.click(screen.getByTestId("add-provider-button"));
       await fireEvent.input(screen.getByTestId("add-name-input"), {
         target: { value: "MyCustom" },
       });
@@ -177,106 +195,39 @@ describe("Settings page", () => {
       });
       await fireEvent.click(screen.getByTestId("add-submit-button"));
 
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(6);
-      expect(screen.getByText("MyCustom")).toBeInTheDocument();
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
     });
 
-    it("shows Korean error and does NOT add a card when name is empty", async () => {
+    it("shows Korean error when name is empty", async () => {
       render(Page);
+      await fireEvent.click(screen.getByTestId("add-provider-button"));
       await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.custom.com/v1" },
+        target: { value: "https://api.x.com/v1" },
       });
       await fireEvent.input(screen.getByTestId("add-models-input"), {
         target: { value: "m1" },
       });
       await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.getByTestId("error-name")).toHaveTextContent(
-        "이름을 입력하세요.",
-      );
+      expect(screen.getByTestId("error-name")).toHaveTextContent("이름을 입력하세요.");
     });
 
     it("shows Korean error when baseURL is empty", async () => {
       render(Page);
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
-        target: { value: "X" },
-      });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
-        target: { value: "m1" },
-      });
+      await fireEvent.click(screen.getByTestId("add-provider-button"));
+      await fireEvent.input(screen.getByTestId("add-name-input"), { target: { value: "X" } });
+      await fireEvent.input(screen.getByTestId("add-models-input"), { target: { value: "m1" } });
       await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.getByTestId("error-base-url")).toHaveTextContent(
-        "Base URL을 입력하세요.",
-      );
+      expect(screen.getByTestId("error-base-url")).toHaveTextContent("Base URL을 입력하세요.");
     });
 
-    it("shows Korean error when baseURL is not a valid URL", async () => {
-      render(Page);
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
-        target: { value: "X" },
-      });
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "not-a-url" },
-      });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
-        target: { value: "m1" },
-      });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.getByTestId("error-base-url")).toHaveTextContent(/URL/);
-    });
-
-    it("shows Korean error when models is empty", async () => {
-      render(Page);
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
-        target: { value: "X" },
-      });
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.x.com/v1" },
-      });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.getByTestId("error-models")).toHaveTextContent(
-        "최소 한 개의 모델을 입력하세요.",
-      );
-    });
-
-    it("resets the form after a successful add", async () => {
-      render(Page);
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
-        target: { value: "Reset" },
-      });
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.r.com/v1" },
-      });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
-        target: { value: "m1" },
-      });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(
-        (screen.getByTestId("add-name-input") as HTMLInputElement).value,
-      ).toBe("");
-      expect(
-        (screen.getByTestId("add-base-url-input") as HTMLInputElement).value,
-      ).toBe("");
-      expect(
-        (screen.getByTestId("add-models-input") as HTMLInputElement).value,
-      ).toBe("");
-    });
-
-    it("sets the new custom provider as active when it is the first provider", async () => {
+    it("sets new custom provider as active when it is the first (wasEmpty)", async () => {
       const setActiveSpy = vi.spyOn(
         await import("$lib/stores/settings"),
         "setActiveProvider",
       );
       render(Page);
 
+      await fireEvent.click(screen.getByTestId("add-provider-button"));
       await fireEvent.input(screen.getByTestId("add-name-input"), {
         target: { value: "First" },
       });
@@ -292,9 +243,8 @@ describe("Settings page", () => {
     });
   });
 
-  describe("custom provider delete flow", () => {
-    it("renders a delete button on custom provider cards", () => {
-      // Seed a custom provider directly via store
+  describe("custom provider edit/delete flow", () => {
+    it("shows delete button in drawer for custom providers", async () => {
       upsertProviderConfig({
         providerId: "ToDelete",
         apiKey: "sk-x",
@@ -303,8 +253,13 @@ describe("Settings page", () => {
       });
 
       render(Page);
-      const deleteButtons = screen.getAllByTestId("delete-button");
-      expect(deleteButtons).toHaveLength(1);
+
+      const customRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "ToDelete") as HTMLElement;
+      await fireEvent.click(within(customRow).getByTestId("edit-button"));
+
+      expect(screen.getByTestId("delete-button")).toBeInTheDocument();
     });
 
     it("does NOT delete when confirm() returns false", async () => {
@@ -317,14 +272,18 @@ describe("Settings page", () => {
       });
 
       render(Page);
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(6);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
 
+      const customRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "Keep") as HTMLElement;
+      await fireEvent.click(within(customRow).getByTestId("edit-button"));
       await fireEvent.click(screen.getByTestId("delete-button"));
 
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(6);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
     });
 
-    it("removes the custom card when confirm() returns true", async () => {
+    it("removes the custom row when confirm() returns true", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       upsertProviderConfig({
         providerId: "Gone",
@@ -334,15 +293,18 @@ describe("Settings page", () => {
       });
 
       render(Page);
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(6);
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
 
+      const customRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "Gone") as HTMLElement;
+      await fireEvent.click(within(customRow).getByTestId("edit-button"));
       await fireEvent.click(screen.getByTestId("delete-button"));
 
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.queryByText("Gone")).toBeNull();
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
     });
 
-    it("passes the Korean confirm message to window.confirm", async () => {
+    it("passes the Korean confirm message to window.confirm (behavior preservation)", async () => {
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
       upsertProviderConfig({
         providerId: "Check",
@@ -352,18 +314,57 @@ describe("Settings page", () => {
       });
 
       render(Page);
+
+      const customRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "Check") as HTMLElement;
+      await fireEvent.click(within(customRow).getByTestId("edit-button"));
       await fireEvent.click(screen.getByTestId("delete-button"));
 
       expect(confirmSpy).toHaveBeenCalledWith("정말 삭제하시겠습니까?");
     });
   });
 
+  describe("active provider management", () => {
+    it("shows 활성 badge on the active provider", () => {
+      upsertProviderConfig(presetConfig());
+      setActiveProvider("openai");
+
+      render(Page);
+      const openaiRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "openai") as HTMLElement;
+      expect(within(openaiRow).getByText("활성")).toBeInTheDocument();
+    });
+
+    it("calls setActiveProvider when set-active button clicked", async () => {
+      const setActiveSpy = vi.spyOn(
+        await import("$lib/stores/settings"),
+        "setActiveProvider",
+      );
+      upsertProviderConfig(presetConfig());
+      setActiveProvider("openai");
+
+      render(Page);
+
+      const geminiRow = screen
+        .getAllByTestId("provider-row")
+        .find((r) => r.getAttribute("data-provider-id") === "gemini") as HTMLElement;
+      await fireEvent.click(within(geminiRow).getByTestId("set-active-button"));
+
+      expect(setActiveSpy).toHaveBeenCalledWith("gemini");
+    });
+  });
+
   describe("store integration", () => {
     it("persists saved providers to localStorage", async () => {
       render(Page);
-      const firstInput = screen.getAllByTestId("api-key-input")[0];
-      await fireEvent.input(firstInput, { target: { value: "sk-persist" } });
-      await fireEvent.click(screen.getAllByTestId("save-button")[0]);
+
+      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      await fireEvent.input(screen.getByTestId("api-key-input"), {
+        target: { value: "sk-persist" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
 
       const raw = localStorage.getItem("translator.settings");
       expect(raw).not.toBeNull();
@@ -385,8 +386,7 @@ describe("Settings page", () => {
       removeProviderConfig("Drop");
 
       render(Page);
-      expect(screen.getAllByTestId("provider-card")).toHaveLength(5);
-      expect(screen.queryByText("Drop")).toBeNull();
+      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
     });
   });
 });

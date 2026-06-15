@@ -8,8 +8,9 @@
 	import { PRESET_PROVIDERS, isPresetId } from '$lib/providers/presets';
 	import { UI } from '$lib/constants/ui-strings';
 	import type { Provider, ProviderConfig } from '$lib/schemas';
-	import ProviderCard from '$lib/components/ProviderCard.svelte';
-	import AddProviderForm from '$lib/components/AddProviderForm.svelte';
+	import ProviderTable from '$lib/components/ProviderTable.svelte';
+	import AddProviderModal from '$lib/components/AddProviderModal.svelte';
+	import EditProviderDrawer from '$lib/components/EditProviderDrawer.svelte';
 
 	let settings = $derived($settingsStore);
 
@@ -30,11 +31,35 @@
 			}))
 	);
 
-	function getConfigForPreset(presetId: string): ProviderConfig | undefined {
-		return settings.providers.find((c) => c.providerId === presetId);
+	let allProviders = $derived<Provider[]>([
+		...PRESET_PROVIDERS,
+		...customEntries.map((e) => e.provider)
+	]);
+
+	let drawerOpen = $state(false);
+	let editingProviderId = $state<string | null>(null);
+
+	let editingProvider = $derived(
+		editingProviderId
+			? (allProviders.find((p) => p.id === editingProviderId) ?? null)
+			: null
+	);
+	let editingConfig = $derived(
+		editingProviderId
+			? (settings.providers.find((c) => c.providerId === editingProviderId) ?? undefined)
+			: undefined
+	);
+
+	function handleEdit(providerId: string): void {
+		editingProviderId = providerId;
+		drawerOpen = true;
 	}
 
-	function handleSave(config: ProviderConfig): void {
+	function handleSetActive(providerId: string): void {
+		setActiveProvider(providerId);
+	}
+
+	function handleSaveFromDrawer(config: ProviderConfig): void {
 		const wasEmpty = settings.providers.length === 0;
 		upsertProviderConfig(config);
 		if (wasEmpty) {
@@ -42,17 +67,30 @@
 		}
 	}
 
-	function handleAdd(_provider: Provider, config: ProviderConfig): void {
+	function handleDeleteFromDrawer(): void {
+		if (editingProviderId) {
+			removeProviderConfig(editingProviderId);
+		}
+		drawerOpen = false;
+		editingProviderId = null;
+	}
+
+	function handleAddFromModal(data: {
+		name: string;
+		baseURL: string;
+		models: string[];
+		defaultModel: string;
+	}): void {
 		const wasEmpty = settings.providers.length === 0;
+		const config: ProviderConfig = {
+			providerId: data.name,
+			apiKey: '',
+			selectedModel: data.defaultModel,
+			baseURL: data.baseURL
+		};
 		upsertProviderConfig(config);
 		if (wasEmpty) {
 			setActiveProvider(config.providerId);
-		}
-	}
-
-	function handleDelete(providerId: string): void {
-		if (confirm('정말 삭제하시겠습니까?')) {
-			removeProviderConfig(providerId);
 		}
 	}
 </script>
@@ -79,24 +117,24 @@
 
 	<section data-testid="preset-providers-section" class="flex flex-col gap-3">
 		<h2 class="text-lg font-semibold text-foreground">Provider</h2>
-		<div class="grid gap-4 sm:grid-cols-2">
-			{#each PRESET_PROVIDERS as preset (preset.id)}
-				<ProviderCard
-					provider={preset}
-					config={getConfigForPreset(preset.id)}
-					onsave={handleSave}
-				/>
-			{/each}
-			{#each customEntries as entry (entry.provider.id)}
-				<ProviderCard
-					provider={entry.provider}
-					config={entry.config}
-					onsave={handleSave}
-					ondelete={() => handleDelete(entry.provider.id)}
-				/>
-			{/each}
-		</div>
+		<ProviderTable
+			providers={allProviders}
+			configs={settings.providers}
+			activeProviderId={settings.activeProviderId}
+			onEdit={handleEdit}
+			onSetActive={handleSetActive}
+		/>
 	</section>
 
-	<AddProviderForm onadd={handleAdd} />
+	<AddProviderModal onsave={handleAddFromModal} />
+
+	{#if editingProvider}
+		<EditProviderDrawer
+			bind:open={drawerOpen}
+			provider={editingProvider}
+			config={editingConfig}
+			onsave={handleSaveFromDrawer}
+			ondelete={editingProvider.kind === 'custom' ? handleDeleteFromDrawer : undefined}
+		/>
+	{/if}
 </div>
