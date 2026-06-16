@@ -1,0 +1,19 @@
+<script lang="ts">
+	import type { HTMLTableAttributes } from "svelte/elements";
+	import { cn, type WithElementRef } from "$lib/utils.js";
+
+	let {
+		ref = $bindable(null),
+		class: className,
+		...restProps
+	}: WithElementRef<HTMLTableAttributes, HTMLTableElement> = $props();
+</script>
+
+<div class="relative w-full overflow-auto">
+	<table
+		bind:this={ref}
+		data-slot="table"
+		class={cn("w-full caption-bottom text-sm", className)}
+		{...restProps}
+	/>
+</div>
