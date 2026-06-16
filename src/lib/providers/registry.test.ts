@@ -99,17 +99,17 @@ describe("createProviderClient", () => {
 });
 
 describe("getAllProviders", () => {
-  it("returns 5 presets + 0 customs for empty settings", () => {
+  it("returns 6 presets + 0 customs for empty settings", () => {
     const all = getAllProviders(emptySettings);
-    expect(all).toHaveLength(5);
-    expect(all.filter((p) => p.kind === "preset")).toHaveLength(5);
+    expect(all).toHaveLength(6);
+    expect(all.filter((p) => p.kind === "preset")).toHaveLength(6);
     expect(all.filter((p) => p.kind === "custom")).toHaveLength(0);
   });
 
-  it("returns 5 presets + N customs when settings has custom providers", () => {
+  it("returns 6 presets + N customs when settings has custom providers", () => {
     const settings = makeSettingsWithCustoms([customProviderConfig]);
     const all = getAllProviders(settings);
-    expect(all).toHaveLength(6);
+    expect(all).toHaveLength(7);
     const customs = all.filter((p) => p.kind === "custom");
     expect(customs).toHaveLength(1);
     expect(customs[0].id).toBe("my-custom");
@@ -126,7 +126,7 @@ describe("getAllProviders", () => {
       defaultTargetLang: "ko",
     };
     const all = getAllProviders(settings);
-    expect(all).toHaveLength(6);
+    expect(all).toHaveLength(7);
     expect(all.filter((p) => p.id === "openai")).toHaveLength(1);
     expect(all.filter((p) => p.id === "my-custom")).toHaveLength(1);
   });
@@ -135,7 +135,7 @@ describe("getAllProviders", () => {
     const settings = makeSettingsWithCustoms([customProviderConfig]);
     const all = getAllProviders(settings);
     expect(all[0].kind).toBe("preset");
-    expect(all[5].kind).toBe("custom");
+    expect(all[6].kind).toBe("custom");
   });
 });
 

@@ -3,95 +3,84 @@
 		settingsStore,
 		upsertProviderConfig,
 		removeProviderConfig,
-		setActiveProvider
-	} from '$lib/stores/settings';
-	import { PRESET_PROVIDERS, isPresetId } from '$lib/providers/presets';
-	import { UI } from '$lib/constants/ui-strings';
-	import type { Provider, ProviderConfig } from '$lib/schemas';
-	import ProviderTable from '$lib/components/ProviderTable.svelte';
-	import AddProviderModal from '$lib/components/AddProviderModal.svelte';
-	import EditProviderDrawer from '$lib/components/EditProviderDrawer.svelte';
+		setActiveProvider,
+	} from "$lib/stores/settings";
+	import { PRESET_PROVIDERS } from "$lib/providers/presets";
+	import { getProviderById } from "$lib/providers/registry";
+	import { UI } from "$lib/constants/ui-strings";
+	import type { Provider, ProviderConfig } from "$lib/schemas";
+	import ProviderList from "$lib/components/ProviderList.svelte";
+	import ProviderEditor from "$lib/components/ProviderEditor.svelte";
 
 	let settings = $derived($settingsStore);
 
-	type CustomEntry = { provider: Provider; config: ProviderConfig };
-	let customEntries = $derived<CustomEntry[]>(
+	// Page owns ALL state; the two panes are presentational.
+	let selectedId = $state<string | null>(null);
+	let isNewMode = $state<boolean>(false);
+
+	// Configured providers = for each stored config, resolve via registry.
+	let configuredProviders = $derived<Provider[]>(
 		settings.providers
-			.filter((c) => !isPresetId(c.providerId))
-			.map((c) => ({
-				provider: {
-					id: c.providerId,
-					name: c.providerId,
-					kind: 'custom' as const,
-					baseURL: c.baseURL ?? '',
-					models: [c.selectedModel],
-					defaultModel: c.selectedModel
-				},
-				config: c
-			}))
+			.map((c) => getProviderById(settings, c.providerId))
+			.filter((p): p is Provider => p !== undefined),
 	);
 
-	let allProviders = $derived<Provider[]>([
-		...PRESET_PROVIDERS,
-		...customEntries.map((e) => e.provider)
-	]);
-
-	let drawerOpen = $state(false);
-	let editingProviderId = $state<string | null>(null);
-
-	let editingProvider = $derived(
-		editingProviderId
-			? (allProviders.find((p) => p.id === editingProviderId) ?? null)
-			: null
-	);
-	let editingConfig = $derived(
-		editingProviderId
-			? (settings.providers.find((c) => c.providerId === editingProviderId) ?? undefined)
-			: undefined
+	// Unconfigured presets = presets without a stored config (available to add).
+	let unconfiguredPresets = $derived<Provider[]>(
+		PRESET_PROVIDERS.filter(
+			(p) => !settings.providers.some((c) => c.providerId === p.id),
+		),
 	);
 
-	function handleEdit(providerId: string): void {
-		editingProviderId = providerId;
-		drawerOpen = true;
+	let selectedProvider = $derived(
+		selectedId
+			? (getProviderById(settings, selectedId) ?? undefined)
+			: undefined,
+	);
+
+	let selectedConfig = $derived(
+		selectedId
+			? (settings.providers.find((c) => c.providerId === selectedId) ??
+					undefined)
+			: undefined,
+	);
+
+	let editorMode = $derived<"edit" | "new">(isNewMode ? "new" : "edit");
+
+	function handleSelect(providerId: string): void {
+		selectedId = providerId;
+		isNewMode = false;
+	}
+
+	function handleNew(): void {
+		isNewMode = true;
+		selectedId = null;
+	}
+
+	function handleCancelNew(): void {
+		isNewMode = false;
+		selectedId = null;
+	}
+
+	function handleSave(config: ProviderConfig, isNew: boolean): void {
+		const wasEmpty = settings.providers.length === 0;
+		upsertProviderConfig(config);
+		if (wasEmpty) {
+			setActiveProvider(config.providerId);
+		}
+		if (isNew) {
+			selectedId = config.providerId;
+			isNewMode = false;
+		}
+	}
+
+	function handleDelete(providerId: string): void {
+		removeProviderConfig(providerId);
+		selectedId = null;
 	}
 
 	function handleSetActive(providerId: string): void {
 		setActiveProvider(providerId);
-	}
-
-	function handleSaveFromDrawer(config: ProviderConfig): void {
-		const wasEmpty = settings.providers.length === 0;
-		upsertProviderConfig(config);
-		if (wasEmpty) {
-			setActiveProvider(config.providerId);
-		}
-	}
-
-	function handleDeleteFromDrawer(): void {
-		if (editingProviderId) {
-			removeProviderConfig(editingProviderId);
-		}
-		drawerOpen = false;
-		editingProviderId = null;
-	}
-
-	function handleAddFromModal(data: {
-		name: string;
-		baseURL: string;
-		models: string[];
-		defaultModel: string;
-	}): void {
-		const wasEmpty = settings.providers.length === 0;
-		const config: ProviderConfig = {
-			providerId: data.name,
-			apiKey: '',
-			selectedModel: data.defaultModel,
-			baseURL: data.baseURL
-		};
-		upsertProviderConfig(config);
-		if (wasEmpty) {
-			setActiveProvider(config.providerId);
-		}
 	}
 </script>
 
@@ -108,33 +97,35 @@
 
 	<div
 		data-testid="security-notice"
-		class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-md p-4"
+		class="border border-yellow-200 bg-yellow-50 rounded-md p-4 dark:border-yellow-700 dark:bg-yellow-900/30"
 	>
 		<p class="text-sm text-yellow-800 dark:text-yellow-200">
 			{UI.SETTINGS_PAGE.SECURITY_NOTICE}
 		</p>
 	</div>
 
-	<section data-testid="preset-providers-section" class="flex flex-col gap-3">
-		<h2 class="text-lg font-semibold text-foreground">Provider</h2>
-		<ProviderTable
-			providers={allProviders}
-			configs={settings.providers}
-			activeProviderId={settings.activeProviderId}
-			onEdit={handleEdit}
-			onSetActive={handleSetActive}
-		/>
-	</section>
-
-	<AddProviderModal onsave={handleAddFromModal} />
-
-	{#if editingProvider}
-		<EditProviderDrawer
-			bind:open={drawerOpen}
-			provider={editingProvider}
-			config={editingConfig}
-			onsave={handleSaveFromDrawer}
-			ondelete={editingProvider.kind === 'custom' ? handleDeleteFromDrawer : undefined}
-		/>
-	{/if}
+	<div class="grid gap-6 md:grid-cols-[300px_1fr]" style="min-height: 480px;">
+		<div class="md:h-[600px]">
+			<ProviderList
+				providers={configuredProviders}
+				configs={settings.providers}
+				activeProviderId={settings.activeProviderId}
+				{selectedId}
+				onselect={handleSelect}
+				onSetActive={handleSetActive}
+				onnew={handleNew}
+			/>
+		</div>
+		<div data-testid="provider-editor" class="md:h-[600px]">
+			<ProviderEditor
+				mode={editorMode}
+				provider={selectedProvider}
+				config={selectedConfig}
+				{unconfiguredPresets}
+				onsave={handleSave}
+				ondelete={handleDelete}
+				oncancel={handleCancelNew}
+			/>
+		</div>
+	</div>
 </div>

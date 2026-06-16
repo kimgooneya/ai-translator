@@ -66,6 +66,24 @@ export const UI = {
     ERROR_BASE_URL_REQUIRED: "Base URL을 입력하세요.",
     ERROR_BASE_URL_INVALID: "올바른 URL 형식이 아닙니다. (예: https://api.example.com/v1)",
     ERROR_MODELS_REQUIRED: "최소 한 개의 모델을 입력하세요.",
+    ERROR_API_KEY_REQUIRED: "API 키를 입력하세요.",
+    ERROR_DEFAULT_MODEL_REQUIRED: "기본 모델을 선택하세요.",
+    // --- Two-pane layout (left list / right editor) ---
+    LIST_TITLE: "Provider",
+    BUTTON_NEW_PROVIDER: "신규 등록",
+    EDITOR_EMPTY_TITLE: "Provider를 선택하세요",
+    EDITOR_EMPTY_DESC:
+      "왼쪽 목록에서 provider를 선택해 편집하거나, 하단의 신규 등록으로 추가하세요.",
+    EDITOR_PICKER_PROMPT: "추가할 provider 종류를 선택하세요",
+    EDITOR_PRESET_OPTION: "프리셋에서 추가",
+    EDITOR_PRESET_DESC: "OpenAI·Gemini 등 미리 정의된 provider",
+    EDITOR_CUSTOM_OPTION: "커스텀 provider 추가",
+    EDITOR_CUSTOM_DESC: "baseURL·모델 등 모든 항목을 직접 입력",
+    EDITOR_OPENAI_COMPAT_OPTION: "OpenAI 호환 추가",
+    EDITOR_OPENAI_COMPAT_DESC:
+      "OpenAI 호환 URL을 입력하면 기본 모델이 미리 채워집니다",
+    PRESET_SELECT_PLACEHOLDER: "프리셋 선택",
+    NO_UNCONFIGURED_PRESETS: "추가 가능한 프리셋이 없습니다.",
   },
   GLOSSARY_PAGE: {
     TITLE: "용어집",

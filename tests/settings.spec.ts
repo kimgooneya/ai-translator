@@ -11,46 +11,52 @@ test.describe("Settings page", () => {
     });
   });
 
-  test("renders the security notice mentioning localStorage", async ({ page }) => {
+  test("renders the security notice mentioning localStorage", async ({
+    page,
+  }) => {
     await page.goto("/settings");
     const notice = page.getByTestId("security-notice");
     await expect(notice).toBeVisible();
     await expect(notice).toContainText("localStorage");
   });
 
-  test("renders the provider table with 5 presets", async ({ page }) => {
+  test("shows the empty list state when no providers are configured", async ({
+    page,
+  }) => {
     await page.goto("/settings");
-    const table = page.getByTestId("provider-table");
-    await expect(table).toBeVisible();
-
-    for (const name of [
-      "OpenAI",
-      "Google Gemini",
-      "Qwen (DashScope)",
-      "Zhipu Z.AI",
-      "DeepSeek",
-    ]) {
-      await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-    }
-    await expect(page.getByTestId("provider-row")).toHaveCount(5);
+    await expect(page.getByTestId("provider-list")).toBeVisible();
+    await expect(page.getByTestId("provider-list-empty")).toBeVisible();
+    await expect(page.getByTestId("editor-empty")).toBeVisible();
   });
 
-  test("shows 미설정 on all presets initially", async ({ page }) => {
+  test("configures a preset via the new-provider flow and persists to localStorage", async ({
+    page,
+  }) => {
     await page.goto("/settings");
-    await expect(page.getByText("미설정").first()).toBeVisible();
-  });
+    await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
-  test("saves an API key to localStorage via edit drawer", async ({ page }) => {
-    await page.goto("/settings");
+    // Open the picker and choose the preset option.
+    await page.getByTestId("new-provider-button").click();
+    await expect(page.getByTestId("editor-picker")).toBeVisible();
+    await page.getByTestId("preset-option").click();
 
-    const editButtons = page.getByTestId("edit-button");
-    await editButtons.first().click();
+    // Pick OpenAI from the preset-select (bits-ui Select).
+    await page.getByTestId("preset-select").click();
+    await page.getByRole("option", { name: "OpenAI" }).click();
 
-    const drawer = page.getByTestId("edit-provider-drawer");
-    await expect(drawer).toBeVisible();
-
-    await page.getByTestId("api-key-input").fill("sk-e2e-test-key");
+    // Enter an API key and save.
+    await page.getByTestId("api-key-input").fill("sk-e2e-preset-key");
     await page.getByTestId("save-button").click();
+
+    // The provider now appears in the list and is the active provider.
+    await expect(
+      page.locator('[data-testid="provider-item"][data-provider-id="openai"]'),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator('[data-testid="provider-item"][data-provider-id="openai"]')
+        .getByTestId("active-badge"),
+    ).toBeVisible();
 
     const raw = await page.evaluate(() =>
       localStorage.getItem("translator.settings"),
@@ -61,58 +67,86 @@ test.describe("Settings page", () => {
       expect.arrayContaining([
         expect.objectContaining({
           providerId: "openai",
-          apiKey: "sk-e2e-test-key",
+          apiKey: "sk-e2e-preset-key",
         }),
       ]),
     );
+    expect(parsed.activeProviderId).toBe("openai");
   });
 
-  test("add custom provider via modal and see it appear in the table", async ({ page }) => {
+  test("adds a custom provider via the new custom flow and sees it in the list", async ({
+    page,
+  }) => {
     await page.goto("/settings");
-    await expect(page.getByTestId("provider-row")).toHaveCount(5);
+    await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
-    await page.getByTestId("add-provider-button").click();
-    const modal = page.getByTestId("add-provider-modal");
-    await expect(modal).toBeVisible();
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("custom-option").click();
 
-    await page.getByTestId("add-name-input").fill("MyProvider");
-    await page.getByTestId("add-base-url-input").fill("https://api.test.com/v1");
-    await page.getByTestId("add-models-input").fill("m1, m2");
-    await page.getByTestId("add-submit-button").click();
+    await page.getByTestId("name-input").fill("MyProvider");
+    await page.getByTestId("base-url-input").fill("https://api.test.com/v1");
+    await page.getByTestId("models-input").fill("m1, m2");
+    await page.getByTestId("save-button").click();
 
-    await expect(page.getByTestId("provider-row")).toHaveCount(6);
-    await expect(page.getByText("MyProvider", { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("provider-item")).toHaveCount(1);
+    await expect(page.getByText("MyProvider", { exact: true })).toBeVisible();
+    await expect(page.getByText("커스텀").first()).toBeVisible();
   });
 
-  test("shows a Korean error when submitting the add modal with an empty name", async ({ page }) => {
+  test("adds a provider via the openai-compat template with pre-filled models", async ({
+    page,
+  }) => {
     await page.goto("/settings");
+    await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
-    await page.getByTestId("add-provider-button").click();
-    await page.getByTestId("add-base-url-input").fill("https://api.test.com/v1");
-    await page.getByTestId("add-models-input").fill("m1");
-    await page.getByTestId("add-submit-button").click();
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("openai-compat-option").click();
 
-    await expect(page.getByTestId("error-name")).toHaveText("이름을 입력하세요.");
-    await expect(page.getByTestId("provider-row")).toHaveCount(5);
-  });
-
-  test("edits and saves a custom provider API key, then deletes it with confirm", async ({ page }) => {
-    await page.goto("/settings");
-
-    await page.getByTestId("add-provider-button").click();
-    await page.getByTestId("add-name-input").fill("Deletable");
-    await page.getByTestId("add-base-url-input").fill("https://api.del.com/v1");
-    await page.getByTestId("add-models-input").fill("m1");
-    await page.getByTestId("add-submit-button").click();
-
-    await expect(page.getByTestId("provider-row")).toHaveCount(6);
-
-    const customRow = page.locator(
-      '[data-testid="provider-row"][data-provider-id="Deletable"]',
+    await expect(page.getByTestId("name-input")).toHaveValue("OpenAI 호환");
+    await expect(page.getByTestId("models-input")).toHaveValue(
+      "gpt-5.4, gpt-5.4-mini",
     );
-    await customRow.getByTestId("edit-button").click();
 
-    await expect(page.getByTestId("edit-provider-drawer")).toBeVisible();
+    await page.getByTestId("base-url-input").fill("https://api.openrouter.ai/v1");
+    await page.getByTestId("save-button").click();
+
+    await expect(page.getByTestId("provider-item")).toHaveCount(1);
+    await expect(page.getByText("OpenAI 호환", { exact: true })).toBeVisible();
+    await expect(page.getByText("커스텀").first()).toBeVisible();
+  });
+
+  test("shows a Korean error when the custom form has an empty name", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("custom-option").click();
+    await page.getByTestId("base-url-input").fill("https://api.test.com/v1");
+    await page.getByTestId("models-input").fill("m1");
+
+    await expect(page.getByTestId("error-name")).toHaveText(
+      "이름을 입력하세요.",
+    );
+  });
+
+  test("edits and saves a custom provider API key, then deletes it with confirm", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    // Add a custom provider first.
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("custom-option").click();
+    await page.getByTestId("name-input").fill("Deletable");
+    await page.getByTestId("base-url-input").fill("https://api.del.com/v1");
+    await page.getByTestId("models-input").fill("m1");
+    await page.getByTestId("save-button").click();
+
+    await expect(page.getByTestId("provider-item")).toHaveCount(1);
+
+    // Open it in the editor and set an API key.
+    await page.locator('[data-testid="provider-item"]').first().click();
     await page.getByTestId("api-key-input").fill("sk-custom-key");
     await page.getByTestId("save-button").click();
 
@@ -123,13 +157,14 @@ test.describe("Settings page", () => {
     expect(parsed.providers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          providerId: "Deletable",
           apiKey: "sk-custom-key",
+          name: "Deletable",
         }),
       ]),
     );
 
-    await customRow.getByTestId("edit-button").click();
+    // Re-open and delete via confirm dialog.
+    await page.locator('[data-testid="provider-item"]').first().click();
     await expect(page.getByTestId("delete-button")).toBeVisible();
 
     const dialogMessage = new Promise<string>((resolve) => {
@@ -141,31 +176,43 @@ test.describe("Settings page", () => {
     await page.getByTestId("delete-button").click();
     expect(await dialogMessage).toContain("삭제");
 
-    await expect(page.getByTestId("provider-row")).toHaveCount(5);
+    await expect(page.getByTestId("provider-item")).toHaveCount(0);
     await expect(page.getByText("Deletable", { exact: true })).toHaveCount(0);
   });
 
-  test("sets active provider via table button", async ({ page }) => {
+  test("sets the active provider via the list button", async ({ page }) => {
     await page.goto("/settings");
 
-    const openaiRow = page.locator(
-      '[data-testid="provider-row"][data-provider-id="openai"]',
-    );
-    await openaiRow.getByTestId("edit-button").click();
-    await page.getByTestId("api-key-input").fill("sk-active-test");
+    // Configure OpenAI (becomes active as the first provider).
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("preset-option").click();
+    await page.getByTestId("preset-select").click();
+    await page.getByRole("option", { name: "OpenAI" }).click();
+    await page.getByTestId("api-key-input").fill("sk-openai");
     await page.getByTestId("save-button").click();
 
-    const geminiRow = page.locator(
-      '[data-testid="provider-row"][data-provider-id="gemini"]',
-    );
-    await geminiRow.getByTestId("set-active-button").click();
+    // Add a custom provider (not active).
+    await page.getByTestId("new-provider-button").click();
+    await page.getByTestId("custom-option").click();
+    await page.getByTestId("name-input").fill("Custom");
+    await page.getByTestId("base-url-input").fill("https://api.custom.com/v1");
+    await page.getByTestId("models-input").fill("m1");
+    await page.getByTestId("save-button").click();
 
-    await expect(geminiRow.getByTestId("active-badge")).toBeVisible();
+    await expect(page.getByTestId("provider-item")).toHaveCount(2);
+
+    // Click set-active on the custom provider row.
+    const customRow = page
+      .locator('[data-testid="provider-item"]')
+      .filter({ hasText: "Custom" });
+    await customRow.getByTestId("set-active-button").click();
+
+    await expect(customRow.getByTestId("active-badge")).toBeVisible();
 
     const raw = await page.evaluate(() =>
       localStorage.getItem("translator.settings"),
     );
     const parsed = JSON.parse(raw ?? "{}");
-    expect(parsed.activeProviderId).toBe("gemini");
+    expect(parsed.activeProviderId).toMatch(/^custom-/);
   });
 });
