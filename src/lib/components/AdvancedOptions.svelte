@@ -9,12 +9,14 @@
   let {
     expanded = $bindable(),
     customPrompt = $bindable(),
+    cleanSourceText = $bindable(),
     glossaryEnabled,
     glossaryCount,
     onToggleGlossary,
   }: {
     expanded: boolean;
     customPrompt: string;
+    cleanSourceText: boolean;
     glossaryEnabled: boolean;
     glossaryCount: number;
     onToggleGlossary: () => void;
@@ -85,6 +87,26 @@
               })})
             </span>
           </Label>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <Switch
+            id="clean-source-text-toggle"
+            data-testid="clean-source-text-toggle"
+            checked={cleanSourceText}
+            onCheckedChange={(v) => (cleanSourceText = v)}
+          />
+          <div class="flex flex-col gap-0.5">
+            <Label
+              for="clean-source-text-toggle"
+              class="text-muted-foreground cursor-pointer select-none"
+            >
+              {$_("translate_page.label_clean_source_text")}
+            </Label>
+            <span class="text-xs text-muted-foreground/70">
+              {$_("translate_page.description_clean_source_text")}
+            </span>
+          </div>
         </div>
       </div>
     </Collapsible.Content>

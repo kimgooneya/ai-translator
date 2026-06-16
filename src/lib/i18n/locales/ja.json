@@ -28,7 +28,9 @@
     "detected_language": "検出：{name}",
     "button_upload": "ファイルを読み込む",
     "link_to_settings": "設定へ移動 →",
-    "glossary_terms_count": "({n}語)"
+    "glossary_terms_count": "({n}語)",
+    "label_clean_source_text": "PDFの改行を整える",
+    "description_clean_source_text": "PDFやスキャン文書からのコピペで壊れた単語やスペースを自然に復元します。詩・歌詞・コードを翻訳するときはオフにしてください。"
   },
   "settings_page": {
     "title": "設定",

@@ -57,6 +57,7 @@ export const translationRequestSchema = z.object({
   model: z.string().min(1),
   glossary: glossarySchema.optional(),
   customPrompt: z.string().optional(),
+  cleanSourceText: z.boolean().optional(),
 });
 
 export const translationHistoryEntrySchema = z.object({

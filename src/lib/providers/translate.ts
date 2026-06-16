@@ -22,6 +22,13 @@ export function buildTranslationMessages(
     ? `\n\nAdditional instruction: ${request.customPrompt}`
     : "";
 
+  // Branch on cleanSourceText: PDF/scanned copy carries artifacts (split
+  // words, missing spaces, mid-sentence newlines) the model should reconstruct
+  // before translating; otherwise preserve source formatting verbatim.
+  const formattingClause = request.cleanSourceText
+    ? "If the source text looks copied from a PDF or scanned document — reconstruct words split across line breaks, fix missing spaces where lines joined, and join mid-sentence newlines into natural sentences before translating. Preserve intentional paragraph breaks (blank lines), lists, and code blocks."
+    : "Preserve emojis, hashtags, @mentions, formatting, and line breaks.";
+
   // Persona is intentionally casual ("friendly helper" not "professional
   // translator") to bias output toward conversational tone for hobby users.
   // The "Translate the user's text to {targetLang}" phrasing is load-bearing —
@@ -30,7 +37,7 @@ export function buildTranslationMessages(
 
 Translate the user's text to ${request.targetLang}. ${sourceLangClause}
 
-Sound natural — translate the way a native speaker would actually say it out loud. Match the original's tone: casual stays casual, slang stays slangy, jokes keep their vibe. Preserve emojis, hashtags, @mentions, formatting, and line breaks. Don't add notes or explanations unless asked.${glossaryClause}${customPromptClause}`;
+Sound natural — translate the way a native speaker would actually say it out loud. Match the original's tone: casual stays casual, slang stays slangy, jokes keep their vibe. ${formattingClause} Don't add notes or explanations unless asked.${glossaryClause}${customPromptClause}`;
 
   return [
     { role: "system", content: systemPrompt },

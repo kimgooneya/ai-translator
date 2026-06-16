@@ -28,7 +28,9 @@
     "detected_language": "Detectado: {name}",
     "button_upload": "Enviar arquivo",
     "link_to_settings": "Ir para configurações →",
-    "glossary_terms_count": "({n} termos)"
+    "glossary_terms_count": "({n} termos)",
+    "label_clean_source_text": "Limpar formatação de PDF",
+    "description_clean_source_text": "Reconstrói palavras quebradas por quebras de linha e corrige espaços ao copiar de PDFs ou digitalizações. Desative para poesia, letras de música ou código."
   },
   "settings_page": {
     "title": "Configurações",

@@ -28,7 +28,9 @@
     "detected_language": "감지: {name}",
     "button_upload": "파일 불러오기",
     "link_to_settings": "설정으로 이동 →",
-    "glossary_terms_count": "({n}개 용어)"
+    "glossary_terms_count": "({n}개 용어)",
+    "label_clean_source_text": "PDF 줄바꿈 정리",
+    "description_clean_source_text": "PDF나 스캔 문서에서 복사할 때 끊어진 단어나 띄어쓰기를 자연스럽게 복원합니다. 시, 가사, 코드를 번역할 때는 꺼주세요."
   },
   "settings_page": {
     "title": "설정",

@@ -30,6 +30,7 @@
   let targetLang = $state("ko");
   let model = $state("");
   let customPrompt = $state("");
+  let cleanSourceText = $state(false);
   let isLoading = $state(false);
   let resultText = $state("");
   let advancedExpanded = $state(false);
@@ -107,6 +108,7 @@
       model: modelName,
       glossary: glossary.enabled ? glossary : undefined,
       customPrompt: customPrompt.trim() || undefined,
+      cleanSourceText: cleanSourceText || undefined,
     };
 
     await translateAction(
@@ -346,6 +348,7 @@
   <AdvancedOptions
     bind:expanded={advancedExpanded}
     bind:customPrompt
+    bind:cleanSourceText
     glossaryEnabled={glossary.enabled}
     glossaryCount={glossary.entries.length}
     onToggleGlossary={handleToggleGlossary}
