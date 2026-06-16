@@ -1,60 +1,63 @@
 /**
- * Error code → Korean user-facing message mapping.
+ * Error code → localized user-facing message helper.
  *
- * The streaming/server layer emits machine-readable error codes
- * (`INVALID_API_KEY`, `RATE_LIMITED`, …). This module is the single source of
- * truth that turns those codes into friendly Korean strings shown in toasts.
+ * Codes are machine-readable strings emitted by the streaming/server layer
+ * (`INVALID_API_KEY`, `RATE_LIMITED`, …). This module is the single source
+ * of truth for the canonical code list and the bridge from a code to a
+ * localized, user-safe message string (looked up via svelte-i18n under the
+ * `errors.{CODE}` key — see `src/lib/i18n/locales/*.json`).
  *
  * Design notes:
- *   - Codes are mapped to the canonical Korean strings already defined in
- *     `UI.ERRORS` (Task 3) so every user-facing surface stays consistent.
- *   - Unknown codes (typos, new server codes not yet wired up) fall back to
- *     `UI.ERRORS.UNKNOWN` rather than surfacing a raw technical string — per
- *     the Task 13 MUST-NOT-DO: never expose stack traces / technical codes.
- *   - `getErrorMessage` is deliberately total (never throws) so callers can
- *     use it directly inside `addToast(...)` without extra guards.
+ *   - Codes are centralized here so the server (`/api/translate`), the
+ *     streaming layer, and the toast wiring share one authoritative list.
+ *   - Unknown/missing codes fall back to `UNKNOWN` so users never see a raw
+ *     technical code or an empty string.
+ *   - `getErrorMessage` is total (never throws) and uses svelte-i18n's `_`
+ *     helper so the returned string reflects the active UI locale.
  */
 
-import { UI } from "./ui-strings";
+import { t } from "$lib/i18n";
 
-/**
- * Keys of {@link UI.ERRORS} that are valid machine error codes.
- *
- * `UNKNOWN` is intentionally included so a round-trip through `getErrorMessage`
- * is idempotent, and excluded codes resolve to it.
- */
-export type ErrorCode = keyof typeof UI.ERRORS;
+/** Machine-readable error codes emitted by the server/streaming layer. */
+export const ERROR_CODES = [
+  "NO_API_KEY",
+  "NO_ACTIVE_PROVIDER",
+  "EMPTY_SOURCE",
+  "INVALID_REQUEST",
+  "INVALID_API_KEY",
+  "RATE_LIMITED",
+  "PROVIDER_ERROR",
+  "STREAM_INTERRUPTED",
+  "NETWORK_ERROR",
+  "STORAGE_FULL",
+  "INVALID_FILE_TYPE",
+  "PDF_NO_TEXT",
+  "PDF_EXTRACTION_FAILED",
+  "UNKNOWN",
+] as const;
 
-/**
- * The canonical "unknown" fallback code. Exported so tests and callers can
- * reference it without hardcoding the literal.
- */
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+/** Canonical fallback code for unrecognized input. */
 export const UNKNOWN_ERROR_CODE: ErrorCode = "UNKNOWN";
 
-/**
- * All error codes recognized by the translator app. Centralized here so the
- * server (`/api/translate`), the streaming layer, and the toast wiring share a
- * single authoritative list.
- */
-export const ERROR_CODES: readonly ErrorCode[] = Object.keys(
-  UI.ERRORS,
-) as readonly ErrorCode[];
+/** Type guard: narrows an arbitrary value to a known {@link ErrorCode}. */
+export function isErrorCode(value: unknown): value is ErrorCode {
+  return (
+    typeof value === "string" &&
+    (ERROR_CODES as readonly string[]).includes(value)
+  );
+}
 
 /**
- * Map a machine error code to a localized Korean message safe to show users.
+ * Map a machine error code to a localized message safe to show users.
  *
- * @param code - Error code emitted by the server/streaming layer. Unknown or
- *   falsy values resolve to `UI.ERRORS.UNKNOWN`.
- * @returns A friendly Korean message (never empty, never technical).
- *
- * @example
- *   getErrorMessage('INVALID_API_KEY') // 'API 키를 확인하세요. 설정에서 다시 입력해 주세요.'
- *   getErrorMessage('RATE_LIMITED')    // '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
- *   getErrorMessage('STORAGE_FULL')    // '저장 공간이 가득 찼습니다. 오래된 기록을 삭제해 주세요.'
+ * @param code - Error code emitted by the server/streaming layer. Unknown,
+ *   null, or undefined values resolve to the `UNKNOWN` code's message.
+ * @returns A friendly message in the active UI locale (never empty, never
+ *   a raw technical code).
  */
 export function getErrorMessage(code: string | null | undefined): string {
-  if (code && code in UI.ERRORS) {
-    return UI.ERRORS[code as ErrorCode];
-  }
-  return UI.ERRORS[UNKNOWN_ERROR_CODE];
+  const normalized = isErrorCode(code) ? code : UNKNOWN_ERROR_CODE;
+  return t(`errors.${normalized}`);
 }

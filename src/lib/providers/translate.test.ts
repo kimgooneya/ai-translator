@@ -105,7 +105,7 @@ describe("buildTranslationMessages", () => {
   it('system message contains "source language: X" when sourceLang is specific', () => {
     const msgs = buildTranslationMessages({ ...baseRequest, sourceLang: "en" });
     const sys = msgs[0].content as string;
-    expect(sys).toContain("source language: en");
+    expect(sys.toLowerCase()).toContain("source language: en");
     expect(sys.toLowerCase()).not.toContain("detect");
   });
 

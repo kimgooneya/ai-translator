@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/svelte";
+import { initI18n } from "$lib/i18n";
+
+// Tests assert against the default Korean locale; override per-test via `locale.set`.
+initI18n();
 
 // Cleanup after each test to avoid memory leaks
 afterEach(() => {
@@ -52,7 +56,8 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     unobserve(): void {}
     disconnect(): void {}
   }
-  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  globalThis.ResizeObserver =
+    ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
 // jsdom does not implement the Pointer Capture API, but bits-ui's Select.Trigger

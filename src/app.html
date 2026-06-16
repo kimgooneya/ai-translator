@@ -1,17 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="text-scale" content="scale" />
     <script>
       try {
-        const theme = localStorage.getItem('mode-watcher-mode');
+        // Restore UI locale before paint to avoid flash of wrong-language UI.
+        // The svelte-i18n `$locale` store is the runtime authority; this only
+        // picks the initial server-rendered/hydrated value.
+        const stored = JSON.parse(
+          localStorage.getItem("translator.locale") || '"ko"',
+        );
         if (
-          theme === 'dark' ||
-          (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          typeof stored === "string" &&
+          ["ko", "en", "es", "zh", "ja", "pt"].includes(stored)
         ) {
-          document.documentElement.classList.add('dark');
+          document.documentElement.lang = stored;
+        }
+        const theme = localStorage.getItem("mode-watcher-mode");
+        if (
+          theme === "dark" ||
+          (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ) {
+          document.documentElement.classList.add("dark");
         }
       } catch (e) {}
     </script>
