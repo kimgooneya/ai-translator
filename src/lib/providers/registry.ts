@@ -18,11 +18,11 @@ export function getAllProviders(settings: Settings): Provider[] {
     .filter((c) => !isPresetId(c.providerId))
     .map((c) => ({
       id: c.providerId,
-      name: c.providerId,
+      name: c.name ?? c.providerId,
       kind: "custom" as const,
       baseURL: c.baseURL ?? "",
-      models: [c.selectedModel],
-      defaultModel: c.selectedModel,
+      models: c.models ?? [c.selectedModel],
+      defaultModel: c.defaultModel ?? c.selectedModel,
     }));
   return [...PRESET_PROVIDERS, ...customs];
 }

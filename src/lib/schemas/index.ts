@@ -16,6 +16,11 @@ export const providerConfigSchema = z.object({
   // Optional for preset providers (baseURL looked up from registry);
   // required for custom providers at validation time.
   baseURL: z.url().optional(),
+  // Custom-provider definition (presets ignore these). Optional for backward
+  // compat: getAllProviders falls back to providerId/selectedModel when absent.
+  name: z.string().min(1).optional(),
+  models: z.array(z.string().min(1)).min(1).optional(),
+  defaultModel: z.string().optional(),
   params: z
     .object({
       temperature: z.number().min(0).max(2).optional(),

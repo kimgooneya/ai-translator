@@ -240,8 +240,8 @@ describe("translationHistoryEntrySchema", () => {
 });
 
 describe("PRESET_PROVIDERS", () => {
-  it("contains exactly 5 preset providers", () => {
-    expect(PRESET_PROVIDERS).toHaveLength(5);
+  it("contains exactly 6 preset providers", () => {
+    expect(PRESET_PROVIDERS).toHaveLength(6);
   });
 
   it('all presets have kind "preset"', () => {
@@ -267,9 +267,16 @@ describe("PRESET_PROVIDERS", () => {
     }
   });
 
-  it("includes the expected 5 ids", () => {
+  it("includes the expected 6 ids", () => {
     const ids = PRESET_PROVIDERS.map((p) => p.id).sort();
-    expect(ids).toEqual(["deepseek", "gemini", "openai", "qwen", "zhipu"]);
+    expect(ids).toEqual([
+      "anthropic",
+      "deepseek",
+      "gemini",
+      "openai",
+      "qwen",
+      "zhipu",
+    ]);
   });
 
   it("isPresetId returns true for known ids, false for unknown", () => {

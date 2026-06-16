@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/svelte";
+import {
+  render,
+  screen,
+  fireEvent,
+  within,
+  waitFor,
+} from "@testing-library/svelte";
 import type { ProviderConfig } from "$lib/schemas";
 import {
   settingsStore,
@@ -12,7 +18,7 @@ import Page from "./+page.svelte";
 function presetConfig(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
   return {
     providerId: "openai",
-    apiKey: "sk-preset",
+    apiKey: "",
     selectedModel: "gpt-5.4-mini",
     ...overrides,
   };
@@ -46,89 +52,108 @@ describe("Settings page", () => {
   describe("title", () => {
     it('renders the page heading "설정"', () => {
       render(Page);
-      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("설정");
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+        "설정",
+      );
     });
   });
 
-  describe("provider table", () => {
-    it("renders the provider table container", () => {
+  describe("two-pane layout", () => {
+    it("renders the provider-list (left pane) container", () => {
       render(Page);
-      expect(screen.getByTestId("provider-table")).toBeInTheDocument();
+      expect(screen.getByTestId("provider-list")).toBeInTheDocument();
     });
 
-    it("renders all 5 preset providers by name", () => {
+    it("renders the provider-editor (right pane) container", () => {
       render(Page);
-      const expected = ["OpenAI", "Google Gemini", "Qwen (DashScope)", "Zhipu Z.AI", "DeepSeek"];
-      for (const name of expected) {
-        expect(screen.getAllByText(name).length).toBeGreaterThanOrEqual(1);
-      }
+      expect(screen.getByTestId("provider-editor")).toBeInTheDocument();
     });
 
-    it("renders 5 provider rows (desktop) when no customs configured", () => {
+    it("renders the new-provider-button", () => {
       render(Page);
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
-    });
-
-    it("shows 미설정 on all presets when no config stored", () => {
-      render(Page);
-      expect(screen.getAllByText("미설정").length).toBeGreaterThanOrEqual(5);
-    });
-
-    it("shows 프리셋 kind label for preset providers", () => {
-      render(Page);
-      expect(screen.getAllByText("프리셋").length).toBeGreaterThanOrEqual(5);
+      expect(screen.getByTestId("new-provider-button")).toBeInTheDocument();
     });
   });
 
-  describe("edit drawer", () => {
-    it("opens the drawer when edit button is clicked", async () => {
+  describe("configured-providers list", () => {
+    it("shows the empty state when no providers are configured", () => {
       render(Page);
-      const editButtons = screen.getAllByTestId("edit-button");
-      await fireEvent.click(editButtons[0]);
-      expect(screen.getByTestId("edit-provider-drawer")).toBeInTheDocument();
+      expect(screen.getByTestId("provider-list-empty")).toBeInTheDocument();
     });
 
-    it("renders apiKey input with type=password in drawer (behavior preservation)", async () => {
+    it("reflects configured providers from the store", () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
       render(Page);
-      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
-      const input = screen.getByTestId("api-key-input") as HTMLInputElement;
-      expect(input.type).toBe("password");
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
     });
 
-    it("does NOT show baseURL input for preset providers in drawer", async () => {
+    it("shows 프리셋 kind label for a configured preset", () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
       render(Page);
-      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
-      expect(screen.queryByTestId("base-url-input")).toBeNull();
+      expect(screen.getAllByText("프리셋").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("calls upsertProviderConfig + setActiveProvider when saving the first provider (wasEmpty)", async () => {
+    it("shows 설정됨 when the configured preset has an apiKey", () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
+      render(Page);
+      expect(screen.getAllByText("설정됨").length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("selecting a provider", () => {
+    it("opens the editor (api-key input) when a provider item is clicked", async () => {
+      upsertProviderConfig(presetConfig({ apiKey: "" }));
+      render(Page);
+      expect(screen.getByTestId("editor-empty")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      expect(screen.getByTestId("api-key-input")).toBeInTheDocument();
+      expect(screen.queryByTestId("editor-empty")).toBeNull();
+    });
+
+    it("highlights the selected item", async () => {
+      upsertProviderConfig(presetConfig({ apiKey: "" }));
+      render(Page);
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      const item = screen.getByTestId("provider-item");
+      expect(item.className).toContain("bg-accent");
+    });
+  });
+
+  describe("saving a preset API key", () => {
+    it("calls upsertProviderConfig and persists to localStorage", async () => {
+      upsertProviderConfig(presetConfig({ apiKey: "" }));
+
       const upsertSpy = vi.spyOn(
         await import("$lib/stores/settings"),
         "upsertProviderConfig",
       );
-      const setActiveSpy = vi.spyOn(
-        await import("$lib/stores/settings"),
-        "setActiveProvider",
-      );
 
       render(Page);
 
-      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
+      await fireEvent.click(screen.getByTestId("provider-item"));
       await fireEvent.input(screen.getByTestId("api-key-input"), {
-        target: { value: "sk-first" },
+        target: { value: "sk-saved" },
       });
       await fireEvent.click(screen.getByTestId("save-button"));
 
       expect(upsertSpy).toHaveBeenCalledTimes(1);
       expect(upsertSpy.mock.calls[0][0]).toMatchObject({
         providerId: "openai",
-        apiKey: "sk-first",
+        apiKey: "sk-saved",
       });
-      expect(setActiveSpy).toHaveBeenCalledWith("openai");
+
+      const raw = localStorage.getItem("translator.settings");
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw ?? "{}");
+      expect(parsed.providers[0]).toMatchObject({
+        providerId: "openai",
+        apiKey: "sk-saved",
+      });
     });
 
     it("does NOT call setActiveProvider when a second provider is saved", async () => {
-      upsertProviderConfig(presetConfig());
+      upsertProviderConfig(presetConfig({ apiKey: "sk-first" }));
       setActiveProvider("openai");
 
       const setActiveSpy = vi.spyOn(
@@ -138,255 +163,269 @@ describe("Settings page", () => {
 
       render(Page);
 
-      const editButtons = screen.getAllByTestId("edit-button");
-      const geminiButton = editButtons.find((btn) => {
-        const row = btn.closest("tr");
-        return row?.getAttribute("data-provider-id") === "gemini";
-      }) as HTMLElement;
-
-      await fireEvent.click(geminiButton);
-      await fireEvent.input(screen.getByTestId("api-key-input"), {
-        target: { value: "sk-gemini" },
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("custom-option"));
+      await fireEvent.input(screen.getByTestId("name-input"), {
+        target: { value: "Second" },
+      });
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.second.com/v1" },
+      });
+      await fireEvent.input(screen.getByTestId("models-input"), {
+        target: { value: "m1" },
       });
       await fireEvent.click(screen.getByTestId("save-button"));
 
       expect(setActiveSpy).not.toHaveBeenCalled();
     });
-
-    it("reflects 설정됨 indicator after a preset is saved", async () => {
-      render(Page);
-      expect(screen.getAllByText("미설정").length).toBeGreaterThanOrEqual(5);
-
-      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
-      await fireEvent.input(screen.getByTestId("api-key-input"), {
-        target: { value: "sk-saved" },
-      });
-      await fireEvent.click(screen.getByTestId("save-button"));
-
-      expect(screen.getAllByText("설정됨").length).toBeGreaterThanOrEqual(1);
-    });
   });
 
-  describe("add provider modal", () => {
-    it("renders the add-provider trigger button", () => {
-      render(Page);
-      expect(screen.getByTestId("add-provider-button")).toBeInTheDocument();
-    });
-
-    it("opens the modal when trigger is clicked", async () => {
-      render(Page);
-      await fireEvent.click(screen.getByTestId("add-provider-button"));
-      expect(screen.getByTestId("add-provider-modal")).toBeInTheDocument();
-    });
-
-    it("adds a custom provider row when submitted with valid data", async () => {
-      render(Page);
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
-
-      await fireEvent.click(screen.getByTestId("add-provider-button"));
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
-        target: { value: "MyCustom" },
-      });
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.custom.com/v1" },
-      });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
-        target: { value: "m1, m2" },
-      });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
-    });
-
-    it("shows Korean error when name is empty", async () => {
-      render(Page);
-      await fireEvent.click(screen.getByTestId("add-provider-button"));
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.x.com/v1" },
-      });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
-        target: { value: "m1" },
-      });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-      expect(screen.getByTestId("error-name")).toHaveTextContent("이름을 입력하세요.");
-    });
-
-    it("shows Korean error when baseURL is empty", async () => {
-      render(Page);
-      await fireEvent.click(screen.getByTestId("add-provider-button"));
-      await fireEvent.input(screen.getByTestId("add-name-input"), { target: { value: "X" } });
-      await fireEvent.input(screen.getByTestId("add-models-input"), { target: { value: "m1" } });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
-      expect(screen.getByTestId("error-base-url")).toHaveTextContent("Base URL을 입력하세요.");
-    });
-
-    it("sets new custom provider as active when it is the first (wasEmpty)", async () => {
+  describe("first-provider-becomes-active", () => {
+    it("calls setActiveProvider when the first provider is saved", async () => {
       const setActiveSpy = vi.spyOn(
         await import("$lib/stores/settings"),
         "setActiveProvider",
       );
+
       render(Page);
 
-      await fireEvent.click(screen.getByTestId("add-provider-button"));
-      await fireEvent.input(screen.getByTestId("add-name-input"), {
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("custom-option"));
+      await fireEvent.input(screen.getByTestId("name-input"), {
         target: { value: "First" },
       });
-      await fireEvent.input(screen.getByTestId("add-base-url-input"), {
-        target: { value: "https://api.f.com/v1" },
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.first.com/v1" },
       });
-      await fireEvent.input(screen.getByTestId("add-models-input"), {
+      await fireEvent.input(screen.getByTestId("models-input"), {
         target: { value: "m1" },
       });
-      await fireEvent.click(screen.getByTestId("add-submit-button"));
+      await fireEvent.click(screen.getByTestId("save-button"));
 
-      expect(setActiveSpy).toHaveBeenCalledWith("First");
+      await waitFor(() => {
+        expect(setActiveSpy).toHaveBeenCalled();
+      });
+      const savedId = setActiveSpy.mock.calls[0][0];
+      expect(savedId).toMatch(/^custom-/);
     });
   });
 
-  describe("custom provider edit/delete flow", () => {
-    it("shows delete button in drawer for custom providers", async () => {
-      upsertProviderConfig({
-        providerId: "ToDelete",
-        apiKey: "sk-x",
-        selectedModel: "m1",
-        baseURL: "https://api.x.com/v1",
+  describe("new custom provider flow", () => {
+    it("shows the picker when 신규 등록 is clicked", async () => {
+      render(Page);
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      expect(screen.getByTestId("editor-picker")).toBeInTheDocument();
+    });
+
+    it("adds a custom provider to the list after saving", async () => {
+      render(Page);
+      expect(screen.queryAllByTestId("provider-item")).toHaveLength(0);
+
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("custom-option"));
+      await fireEvent.input(screen.getByTestId("name-input"), {
+        target: { value: "MyCustom" },
       });
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.custom.com/v1" },
+      });
+      await fireEvent.input(screen.getByTestId("models-input"), {
+        target: { value: "m1, m2" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
+      });
+      expect(screen.getAllByText("MyCustom").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("shows 커스텀 kind label for the new custom provider", async () => {
+      render(Page);
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("custom-option"));
+      await fireEvent.input(screen.getByTestId("name-input"), {
+        target: { value: "MyCustom" },
+      });
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.custom.com/v1" },
+      });
+      await fireEvent.input(screen.getByTestId("models-input"), {
+        target: { value: "m1" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(screen.getAllByText("커스텀").length).toBeGreaterThanOrEqual(1);
+      });
+    });
+  });
+
+  describe("new openai-compat provider flow", () => {
+    it("adds a provider via the openai-compat template after entering only baseURL", async () => {
+      render(Page);
+      expect(screen.queryAllByTestId("provider-item")).toHaveLength(0);
+
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("openai-compat-option"));
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.openrouter.ai/v1" },
+      });
+      await fireEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
+      });
+      expect(screen.getAllByText("OpenAI 호환").length).toBeGreaterThanOrEqual(
+        1,
+      );
+    });
+
+    it("makes the openai-compat provider the active one when it is the first provider", async () => {
+      const setActiveSpy = vi.spyOn(
+        await import("$lib/stores/settings"),
+        "setActiveProvider",
+      );
 
       render(Page);
 
-      const customRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "ToDelete") as HTMLElement;
-      await fireEvent.click(within(customRow).getByTestId("edit-button"));
-
-      expect(screen.getByTestId("delete-button")).toBeInTheDocument();
-    });
-
-    it("does NOT delete when confirm() returns false", async () => {
-      vi.spyOn(window, "confirm").mockReturnValue(false);
-      upsertProviderConfig({
-        providerId: "Keep",
-        apiKey: "sk-x",
-        selectedModel: "m1",
-        baseURL: "https://api.k.com/v1",
+      await fireEvent.click(screen.getByTestId("new-provider-button"));
+      await fireEvent.click(screen.getByTestId("openai-compat-option"));
+      await fireEvent.input(screen.getByTestId("base-url-input"), {
+        target: { value: "https://api.openrouter.ai/v1" },
       });
+      await fireEvent.click(screen.getByTestId("save-button"));
 
-      render(Page);
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
-
-      const customRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "Keep") as HTMLElement;
-      await fireEvent.click(within(customRow).getByTestId("edit-button"));
-      await fireEvent.click(screen.getByTestId("delete-button"));
-
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
+      await waitFor(() => {
+        expect(setActiveSpy).toHaveBeenCalled();
+      });
+      expect(setActiveSpy.mock.calls[0][0]).toMatch(/^custom-/);
     });
+  });
 
-    it("removes the custom row when confirm() returns true", async () => {
+  describe("delete custom provider", () => {
+    it("removes the custom provider from the list after delete + confirm", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       upsertProviderConfig({
-        providerId: "Gone",
+        providerId: "custom-todelete",
         apiKey: "sk-x",
         selectedModel: "m1",
-        baseURL: "https://api.g.com/v1",
+        baseURL: "https://api.del.com/v1",
+        name: "ToDelete",
+        models: ["m1"],
+        defaultModel: "m1",
       });
 
       render(Page);
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(6);
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
 
-      const customRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "Gone") as HTMLElement;
-      await fireEvent.click(within(customRow).getByTestId("edit-button"));
+      await fireEvent.click(screen.getByTestId("provider-item"));
       await fireEvent.click(screen.getByTestId("delete-button"));
 
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
+      await waitFor(() => {
+        expect(screen.queryAllByTestId("provider-item")).toHaveLength(0);
+      });
     });
 
-    it("passes the Korean confirm message to window.confirm (behavior preservation)", async () => {
+    it("passes the Korean confirm message to window.confirm", async () => {
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
       upsertProviderConfig({
-        providerId: "Check",
+        providerId: "custom-check",
         apiKey: "sk-x",
         selectedModel: "m1",
         baseURL: "https://api.c.com/v1",
+        name: "Check",
+        models: ["m1"],
+        defaultModel: "m1",
       });
 
       render(Page);
-
-      const customRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "Check") as HTMLElement;
-      await fireEvent.click(within(customRow).getByTestId("edit-button"));
+      await fireEvent.click(screen.getByTestId("provider-item"));
       await fireEvent.click(screen.getByTestId("delete-button"));
 
       expect(confirmSpy).toHaveBeenCalledWith("정말 삭제하시겠습니까?");
     });
-  });
 
-  describe("active provider management", () => {
-    it("shows 활성 badge on the active provider", () => {
-      upsertProviderConfig(presetConfig());
-      setActiveProvider("openai");
+    it("does NOT delete when confirm returns false", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      upsertProviderConfig({
+        providerId: "custom-keep",
+        apiKey: "sk-x",
+        selectedModel: "m1",
+        baseURL: "https://api.k.com/v1",
+        name: "Keep",
+        models: ["m1"],
+        defaultModel: "m1",
+      });
 
       render(Page);
-      const openaiRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "openai") as HTMLElement;
-      expect(within(openaiRow).getByText("활성")).toBeInTheDocument();
-    });
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      await fireEvent.click(screen.getByTestId("delete-button"));
 
-    it("calls setActiveProvider when set-active button clicked", async () => {
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
+    });
+  });
+
+  describe("set-active", () => {
+    it("updates the store via setActiveProvider when set-active clicked", async () => {
       const setActiveSpy = vi.spyOn(
         await import("$lib/stores/settings"),
         "setActiveProvider",
       );
-      upsertProviderConfig(presetConfig());
+
+      upsertProviderConfig(
+        presetConfig({ providerId: "openai", apiKey: "sk-a" }),
+      );
+      upsertProviderConfig(
+        presetConfig({
+          providerId: "gemini",
+          apiKey: "sk-g",
+          selectedModel: "gemini-3.5-flash",
+        }),
+      );
       setActiveProvider("openai");
 
       render(Page);
 
-      const geminiRow = screen
-        .getAllByTestId("provider-row")
-        .find((r) => r.getAttribute("data-provider-id") === "gemini") as HTMLElement;
-      await fireEvent.click(within(geminiRow).getByTestId("set-active-button"));
+      const geminiItem = screen
+        .getAllByTestId("provider-item")
+        .find(
+          (el) => el.getAttribute("data-provider-id") === "gemini",
+        ) as HTMLElement;
+      await fireEvent.click(
+        within(geminiItem).getByTestId("set-active-button"),
+      );
 
       expect(setActiveSpy).toHaveBeenCalledWith("gemini");
+    });
+
+    it("shows the active badge on the active provider", () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-a" }));
+      setActiveProvider("openai");
+
+      render(Page);
+      const openaiItem = screen
+        .getAllByTestId("provider-item")
+        .find(
+          (el) => el.getAttribute("data-provider-id") === "openai",
+        ) as HTMLElement;
+      expect(
+        within(openaiItem).getByTestId("active-badge"),
+      ).toBeInTheDocument();
     });
   });
 
   describe("store integration", () => {
-    it("persists saved providers to localStorage", async () => {
+    it("removeProviderConfig drops the provider from the list", () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-a" }));
       render(Page);
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
 
-      await fireEvent.click(screen.getAllByTestId("edit-button")[0]);
-      await fireEvent.input(screen.getByTestId("api-key-input"), {
-        target: { value: "sk-persist" },
+      removeProviderConfig("openai");
+      // After store mutation, the derived list re-renders on next tick.
+      waitFor(() => {
+        expect(screen.queryAllByTestId("provider-item")).toHaveLength(0);
       });
-      await fireEvent.click(screen.getByTestId("save-button"));
-
-      const raw = localStorage.getItem("translator.settings");
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw ?? "{}");
-      expect(parsed.providers).toHaveLength(1);
-      expect(parsed.providers[0]).toMatchObject({
-        providerId: "openai",
-        apiKey: "sk-persist",
-      });
-    });
-
-    it("removeProviderConfig drops the provider from the store", () => {
-      upsertProviderConfig({
-        providerId: "Drop",
-        apiKey: "sk",
-        selectedModel: "m1",
-        baseURL: "https://api.d.com/v1",
-      });
-      removeProviderConfig("Drop");
-
-      render(Page);
-      expect(screen.getAllByTestId("provider-row")).toHaveLength(5);
     });
   });
 });

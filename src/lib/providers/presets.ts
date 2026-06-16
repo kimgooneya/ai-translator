@@ -41,6 +41,14 @@ export const PRESET_PROVIDERS: readonly Provider[] = [
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
     defaultModel: "deepseek-v4-flash",
   },
+  {
+    id: "anthropic",
+    name: "Anthropic Claude",
+    kind: "preset",
+    baseURL: "https://api.anthropic.com/v1/",
+    models: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    defaultModel: "claude-sonnet-4-6",
+  },
 ] as const;
 
 export const PRESET_PROVIDER_IDS = PRESET_PROVIDERS.map((p) => p.id);
