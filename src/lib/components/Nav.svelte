@@ -7,12 +7,12 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import LanguageSwitcher from "./LanguageSwitcher.svelte";
 
-  const links = [
+  const links = $derived([
     { href: "/", label: $_("nav.translate") },
     { href: "/settings", label: $_("nav.settings") },
     { href: "/glossary", label: $_("nav.glossary") },
     { href: "/history", label: $_("nav.history") },
-  ];
+  ]);
 
   function isActive(href: string, pathname: string): boolean {
     if (href === "/") return pathname === "/";
