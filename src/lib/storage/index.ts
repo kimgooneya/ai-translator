@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   glossary: "translator.glossary",
   history: "translator.history",
   theme: "translator.theme",
+  locale: "translator.locale",
 } as const;
 
 export interface SaveResult {

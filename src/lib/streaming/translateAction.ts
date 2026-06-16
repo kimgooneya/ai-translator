@@ -18,7 +18,7 @@
 
 import { consumeTranslationStream } from "./consumeTranslationStream";
 import type { TranslationRequest } from "$lib/schemas";
-import { UI } from "$lib/constants/ui-strings";
+import { t } from "$lib/i18n";
 
 export interface TranslateCallbacks {
   /** Called for every text chunk. `accumulated` is the full text so far. */
@@ -53,18 +53,18 @@ export async function translateAction(
     // User cancelled before/during the fetch — keep partial result,
     // do not surface as error.
     if (err instanceof DOMException && err.name === "AbortError") return;
-    callbacks.onError?.("NETWORK_ERROR", UI.ERRORS.NETWORK_ERROR);
+    callbacks.onError?.("NETWORK_ERROR", t("errors.NETWORK_ERROR"));
     return;
   }
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({
       error: "UNKNOWN",
-      message: UI.ERRORS.UNKNOWN,
+      message: t("errors.UNKNOWN"),
     }));
     callbacks.onError?.(
       err.error ?? "UNKNOWN",
-      err.message ?? UI.ERRORS.UNKNOWN,
+      err.message ?? t("errors.UNKNOWN"),
     );
     return;
   }
@@ -85,6 +85,6 @@ export async function translateAction(
     }
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") return;
-    callbacks.onError?.("STREAM_INTERRUPTED", UI.ERRORS.STREAM_INTERRUPTED);
+    callbacks.onError?.("STREAM_INTERRUPTED", t("errors.STREAM_INTERRUPTED"));
   }
 }

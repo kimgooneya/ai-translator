@@ -1,53 +1,56 @@
 import { describe, it, expect } from "vitest";
-import { UI } from "$lib/constants/ui-strings";
+import { t } from "$lib/i18n";
 import {
   getErrorMessage,
   ERROR_CODES,
   UNKNOWN_ERROR_CODE,
+  isErrorCode,
   type ErrorCode,
 } from "$lib/constants/error-messages";
 
 describe("getErrorMessage", () => {
   describe("known codes", () => {
-    it("maps INVALID_API_KEY to the friendly Korean message", () => {
+    it("maps INVALID_API_KEY to the localized message via i18n", () => {
       expect(getErrorMessage("INVALID_API_KEY")).toBe(
-        UI.ERRORS.INVALID_API_KEY,
+        t("errors.INVALID_API_KEY"),
       );
     });
 
-    it("maps RATE_LIMITED to the friendly Korean message", () => {
-      expect(getErrorMessage("RATE_LIMITED")).toBe(UI.ERRORS.RATE_LIMITED);
+    it("maps RATE_LIMITED to the localized message", () => {
+      expect(getErrorMessage("RATE_LIMITED")).toBe(t("errors.RATE_LIMITED"));
     });
 
-    it("maps STORAGE_FULL to the friendly Korean message", () => {
-      expect(getErrorMessage("STORAGE_FULL")).toBe(UI.ERRORS.STORAGE_FULL);
+    it("maps STORAGE_FULL to the localized message", () => {
+      expect(getErrorMessage("STORAGE_FULL")).toBe(t("errors.STORAGE_FULL"));
     });
 
-    it("maps STREAM_INTERRUPTED to the friendly Korean message", () => {
+    it("maps STREAM_INTERRUPTED to the localized message", () => {
       expect(getErrorMessage("STREAM_INTERRUPTED")).toBe(
-        UI.ERRORS.STREAM_INTERRUPTED,
+        t("errors.STREAM_INTERRUPTED"),
       );
     });
 
-    it("maps NETWORK_ERROR to the friendly Korean message", () => {
-      expect(getErrorMessage("NETWORK_ERROR")).toBe(UI.ERRORS.NETWORK_ERROR);
+    it("maps NETWORK_ERROR to the localized message", () => {
+      expect(getErrorMessage("NETWORK_ERROR")).toBe(t("errors.NETWORK_ERROR"));
     });
 
-    it("maps PROVIDER_ERROR to the friendly Korean message", () => {
-      expect(getErrorMessage("PROVIDER_ERROR")).toBe(UI.ERRORS.PROVIDER_ERROR);
+    it("maps PROVIDER_ERROR to the localized message", () => {
+      expect(getErrorMessage("PROVIDER_ERROR")).toBe(
+        t("errors.PROVIDER_ERROR"),
+      );
     });
 
-    it("maps INVALID_REQUEST to the friendly Korean message", () => {
+    it("maps INVALID_REQUEST to the localized message", () => {
       expect(getErrorMessage("INVALID_REQUEST")).toBe(
-        UI.ERRORS.INVALID_REQUEST,
+        t("errors.INVALID_REQUEST"),
       );
     });
 
-    it("maps NO_API_KEY to the friendly Korean message", () => {
-      expect(getErrorMessage("NO_API_KEY")).toBe(UI.ERRORS.NO_API_KEY);
+    it("maps NO_API_KEY to the localized message", () => {
+      expect(getErrorMessage("NO_API_KEY")).toBe(t("errors.NO_API_KEY"));
     });
 
-    it("returns the exact localized string (not a raw technical code)", () => {
+    it("returns a friendly Korean string under the default ko locale", () => {
       const msg = getErrorMessage("INVALID_API_KEY");
       expect(msg).not.toBe("INVALID_API_KEY");
       expect(msg).toBe("API 키를 확인하세요. 설정에서 다시 입력해 주세요.");
@@ -55,24 +58,24 @@ describe("getErrorMessage", () => {
   });
 
   describe("unknown codes", () => {
-    it("falls back to UNKNOWN for an unrecognized code", () => {
-      expect(getErrorMessage("SOMETHING_NEW")).toBe(UI.ERRORS.UNKNOWN);
+    it("falls back to the UNKNOWN message for an unrecognized code", () => {
+      expect(getErrorMessage("SOMETHING_NEW")).toBe(t("errors.UNKNOWN"));
     });
 
-    it("falls back to UNKNOWN for an empty string", () => {
-      expect(getErrorMessage("")).toBe(UI.ERRORS.UNKNOWN);
+    it("falls back to the UNKNOWN message for an empty string", () => {
+      expect(getErrorMessage("")).toBe(t("errors.UNKNOWN"));
     });
 
-    it("falls back to UNKNOWN for null", () => {
-      expect(getErrorMessage(null)).toBe(UI.ERRORS.UNKNOWN);
+    it("falls back to the UNKNOWN message for null", () => {
+      expect(getErrorMessage(null)).toBe(t("errors.UNKNOWN"));
     });
 
-    it("falls back to UNKNOWN for undefined", () => {
-      expect(getErrorMessage(undefined)).toBe(UI.ERRORS.UNKNOWN);
+    it("falls back to the UNKNOWN message for undefined", () => {
+      expect(getErrorMessage(undefined)).toBe(t("errors.UNKNOWN"));
     });
 
     it("is idempotent for the UNKNOWN code itself", () => {
-      expect(getErrorMessage("UNKNOWN")).toBe(UI.ERRORS.UNKNOWN);
+      expect(getErrorMessage("UNKNOWN")).toBe(t("errors.UNKNOWN"));
     });
 
     it("never returns an empty string", () => {
@@ -83,17 +86,43 @@ describe("getErrorMessage", () => {
 });
 
 describe("ERROR_CODES", () => {
-  it("includes every code defined in UI.ERRORS", () => {
-    const uiKeys = Object.keys(UI.ERRORS);
-    for (const key of uiKeys) {
+  it("includes every required error code", () => {
+    const required = [
+      "NO_API_KEY",
+      "INVALID_API_KEY",
+      "RATE_LIMITED",
+      "PROVIDER_ERROR",
+      "STREAM_INTERRUPTED",
+      "STORAGE_FULL",
+      "UNKNOWN",
+    ];
+    for (const key of required) {
       expect(ERROR_CODES).toContain(key);
     }
   });
 
-  it("includes the required INVALID_API_KEY, RATE_LIMITED, STORAGE_FULL codes", () => {
-    expect(ERROR_CODES).toContain("INVALID_API_KEY");
-    expect(ERROR_CODES).toContain("RATE_LIMITED");
-    expect(ERROR_CODES).toContain("STORAGE_FULL");
+  it("matches the keys present in the ko locale JSON exactly", async () => {
+    const ko = (await import("$lib/i18n/locales/ko.json")).default;
+    const localeKeys = Object.keys(ko.errors).sort();
+    expect([...ERROR_CODES].sort()).toEqual(localeKeys);
+  });
+});
+
+describe("isErrorCode", () => {
+  it("narrows known codes", () => {
+    expect(isErrorCode("INVALID_API_KEY")).toBe(true);
+    expect(isErrorCode("UNKNOWN")).toBe(true);
+  });
+
+  it("rejects unknown codes", () => {
+    expect(isErrorCode("SOMETHING_NEW")).toBe(false);
+    expect(isErrorCode("")).toBe(false);
+  });
+
+  it("rejects non-strings", () => {
+    expect(isErrorCode(null)).toBe(false);
+    expect(isErrorCode(undefined)).toBe(false);
+    expect(isErrorCode(42)).toBe(false);
   });
 });
 

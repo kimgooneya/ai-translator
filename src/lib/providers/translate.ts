@@ -5,10 +5,10 @@ import { createProviderClient, getProviderById } from "./registry";
 export function buildTranslationMessages(
   request: TranslationRequest,
 ): ChatCompletionMessageParam[] {
-  const sourceLangDesc =
+  const sourceLangClause =
     request.sourceLang === "auto"
-      ? "detect the source language automatically"
-      : `source language: ${request.sourceLang}`;
+      ? "Detect the source language automatically from the text."
+      : `Source language: ${request.sourceLang}.`;
 
   const glossaryClause =
     request.glossary?.enabled && request.glossary.entries.length > 0
@@ -22,7 +22,15 @@ export function buildTranslationMessages(
     ? `\n\nAdditional instruction: ${request.customPrompt}`
     : "";
 
-  const systemPrompt = `You are a professional translator. Translate the user's text to ${request.targetLang}. The ${sourceLangDesc}. Preserve meaning, tone, and formatting.${glossaryClause}${customPromptClause}`;
+  // Persona is intentionally casual ("friendly helper" not "professional
+  // translator") to bias output toward conversational tone for hobby users.
+  // The "Translate the user's text to {targetLang}" phrasing is load-bearing —
+  // callers and tests rely on it.
+  const systemPrompt = `You're a friendly translator helping someone enjoy content in another language — chats, games, social posts, song lyrics, recipes, travel phrases, fandom, and everyday conversations.
+
+Translate the user's text to ${request.targetLang}. ${sourceLangClause}
+
+Sound natural — translate the way a native speaker would actually say it out loud. Match the original's tone: casual stays casual, slang stays slangy, jokes keep their vibe. Preserve emojis, hashtags, @mentions, formatting, and line breaks. Don't add notes or explanations unless asked.${glossaryClause}${customPromptClause}`;
 
   return [
     { role: "system", content: systemPrompt },
