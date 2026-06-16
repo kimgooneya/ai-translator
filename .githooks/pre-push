@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# pre-push — runs the secret scanner before any `git push` is sent.
+#
+# Installation (zero-touch via npm):  npm install  (prepare script sets core.hooksPath)
+# Manual install:                      npm run setup:hooks
+#                                      (equivalent to: git config core.hooksPath .githooks)
+#
+# This hook receives the pushed refs on stdin but intentionally ignores them —
+# check-secrets.sh scans all tracked files so behavior matches CI exactly.
+
+repo_root=$(git rev-parse --show-toplevel)
+exec "$repo_root/scripts/check-secrets.sh"
