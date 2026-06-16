@@ -28,7 +28,9 @@
     "detected_language": "Detectado: {name}",
     "button_upload": "Subir archivo",
     "link_to_settings": "Ir a ajustes →",
-    "glossary_terms_count": "({n} términos)"
+    "glossary_terms_count": "({n} términos)",
+    "label_clean_source_text": "Limpiar formato PDF",
+    "description_clean_source_text": "Reconstruye palabras partidas por saltos de línea y corrige espacios al copiar de PDF o escaneos. Desactívalo para poesía, letras de canciones o código."
   },
   "settings_page": {
     "title": "Ajustes",

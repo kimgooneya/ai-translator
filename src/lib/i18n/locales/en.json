@@ -28,7 +28,9 @@
     "detected_language": "Detected: {name}",
     "button_upload": "Upload file",
     "link_to_settings": "Go to settings →",
-    "glossary_terms_count": "({n} terms)"
+    "glossary_terms_count": "({n} terms)",
+    "label_clean_source_text": "Clean PDF formatting",
+    "description_clean_source_text": "Rejoin words split across line breaks and fix spacing from PDFs or scans. Keep off for poetry, lyrics, or code."
   },
   "settings_page": {
     "title": "Settings",

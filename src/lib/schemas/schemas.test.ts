@@ -103,7 +103,11 @@ describe("providerConfigSchema", () => {
   });
 
   it("allows empty apiKey (validation happens at request time)", () => {
-    const valid = { providerId: "openai", apiKey: "", selectedModel: "gpt-5.4" };
+    const valid = {
+      providerId: "openai",
+      apiKey: "",
+      selectedModel: "gpt-5.4",
+    };
     expect(providerConfigSchema.parse(valid)).toEqual(valid);
   });
 });
@@ -193,6 +197,20 @@ describe("translationRequestSchema", () => {
     expect(translationRequestSchema.parse(valid).customPrompt).toBe(
       "비즈니스 격식체",
     );
+  });
+
+  it("accepts optional cleanSourceText boolean", () => {
+    const parsed = translationRequestSchema.parse({
+      ...validBase,
+      cleanSourceText: true,
+    });
+    expect(parsed.cleanSourceText).toBe(true);
+  });
+
+  it("accepts request without cleanSourceText (backward compat)", () => {
+    expect(
+      translationRequestSchema.parse(validBase).cleanSourceText,
+    ).toBeUndefined();
   });
 });
 

@@ -28,7 +28,9 @@
     "detected_language": "检测到：{name}",
     "button_upload": "上传文件",
     "link_to_settings": "前往设置 →",
-    "glossary_terms_count": "({n}个术语)"
+    "glossary_terms_count": "({n}个术语)",
+    "label_clean_source_text": "整理 PDF 换行",
+    "description_clean_source_text": "自动修复从 PDF 或扫描件复制时断开的单词和空格。翻译诗歌、歌词或代码时请关闭。"
   },
   "settings_page": {
     "title": "设置",

@@ -169,6 +169,28 @@ describe("buildTranslationMessages", () => {
     expect(sys.toLowerCase()).not.toMatch(/additional instruction/);
   });
 
+  it("system message contains PDF reconstruction clause when cleanSourceText is true", () => {
+    const sys = buildTranslationMessages({
+      ...baseRequest,
+      cleanSourceText: true,
+    })[0].content as string;
+    expect(sys.toLowerCase()).toMatch(/reconstruct/);
+    expect(sys).not.toMatch(/Preserve emojis/i);
+  });
+
+  it("system message contains standard preserve-formatting clause when cleanSourceText is false", () => {
+    const sys = buildTranslationMessages({
+      ...baseRequest,
+      cleanSourceText: false,
+    })[0].content as string;
+    expect(sys).toMatch(/Preserve emojis, hashtags/i);
+  });
+
+  it("system message contains standard preserve-formatting clause when cleanSourceText is undefined", () => {
+    const sys = buildTranslationMessages(baseRequest)[0].content as string;
+    expect(sys).toMatch(/Preserve emojis, hashtags/i);
+  });
+
   it("user message equals sourceText", () => {
     const msgs = buildTranslationMessages(baseRequest);
     expect(msgs[1].content).toBe(baseRequest.sourceText);
