@@ -25,8 +25,9 @@ vite.config.ts.timestamp-*
 # Git worktrees
 .worktrees/
 
-# OpenCode tooling (not part of project)
-.opencode/
+# OpenCode tooling (not part of project) — ignore contents but keep project skills tracked
+.opencode/*
+!.opencode/skill/
 
 # Playwright MCP tooling artifacts (not part of project)
 .playwright-mcp/
