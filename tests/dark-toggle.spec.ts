@@ -37,9 +37,10 @@ test.describe("Dark mode toggle (mode-watcher)", () => {
     // Sanity: starting from light (no .dark class on <html>).
     await expect(html).not.toHaveClass(/\bdark\b/, { timeout: 5000 });
 
-    // Toggle dark mode via the Nav button. mode-watcher's `toggleMode` writes
-    // `mode-watcher-mode=dark` to localStorage and toggles the .dark class
-    // on documentElement.
+    // The theme toggle lives inside the sidebar's settings popover, so open
+    // it first. mode-watcher's `toggleMode` writes `mode-watcher-mode=dark`
+    // to localStorage and toggles the .dark class on documentElement.
+    await page.getByTestId("settings-popover-trigger").click();
     await page.getByTestId("theme-toggle").click();
 
     // Use a polling assertion (NOT a fixed waitForTimeout) so the test
@@ -76,6 +77,8 @@ test.describe("Dark mode toggle (mode-watcher)", () => {
     const html = page.locator("html");
     await expect(html).not.toHaveClass(/\bdark\b/, { timeout: 5000 });
 
+    // Theme toggle is inside the settings popover — open it first.
+    await page.getByTestId("settings-popover-trigger").click();
     const toggle = page.getByTestId("theme-toggle");
 
     // dark → light

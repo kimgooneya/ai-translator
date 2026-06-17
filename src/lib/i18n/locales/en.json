@@ -8,7 +8,16 @@
     "settings": "Settings",
     "glossary": "Glossary",
     "history": "History",
-    "theme_toggle": "Toggle dark mode"
+    "theme_toggle": "Toggle dark mode",
+    "new_translation": "New translation",
+    "recent_history": "Recent",
+    "view_all_history": "All history",
+    "no_history": "No history yet",
+    "provider_settings": "Provider settings",
+    "open_settings": "Open settings",
+    "time_ago_minutes": "{n}m ago",
+    "time_ago_hours": "{n}h ago",
+    "time_ago_days": "{n}d ago"
   },
   "translate_page": {
     "placeholder_source": "Type what you want to translate",

@@ -8,7 +8,16 @@
     "settings": "설정",
     "glossary": "용어집",
     "history": "기록",
-    "theme_toggle": "다크모드 전환"
+    "theme_toggle": "다크모드 전환",
+    "new_translation": "새 번역",
+    "recent_history": "최근 기록",
+    "view_all_history": "기록 전체",
+    "no_history": "기록이 없습니다",
+    "provider_settings": "프로바이더 설정",
+    "open_settings": "설정 열기",
+    "time_ago_minutes": "{n}분 전",
+    "time_ago_hours": "{n}시간 전",
+    "time_ago_days": "{n}일 전"
   },
   "translate_page": {
     "placeholder_source": "번역할 텍스트를 입력하세요",
