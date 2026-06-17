@@ -8,7 +8,16 @@
     "settings": "設定",
     "glossary": "用語集",
     "history": "履歴",
-    "theme_toggle": "ダークモードに切り替え"
+    "theme_toggle": "ダークモードに切り替え",
+    "new_translation": "新規翻訳",
+    "recent_history": "最近の履歴",
+    "view_all_history": "すべての履歴",
+    "no_history": "履歴がありません",
+    "provider_settings": "プロバイダー設定",
+    "open_settings": "設定を開く",
+    "time_ago_minutes": "{n}分前",
+    "time_ago_hours": "{n}時間前",
+    "time_ago_days": "{n}日前"
   },
   "translate_page": {
     "placeholder_source": "翻訳したいテキストを入力してください",

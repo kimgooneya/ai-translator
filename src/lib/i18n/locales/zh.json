@@ -8,7 +8,16 @@
     "settings": "设置",
     "glossary": "术语表",
     "history": "历史",
-    "theme_toggle": "切换深色模式"
+    "theme_toggle": "切换深色模式",
+    "new_translation": "新翻译",
+    "recent_history": "最近记录",
+    "view_all_history": "全部记录",
+    "no_history": "暂无记录",
+    "provider_settings": "服务商设置",
+    "open_settings": "打开设置",
+    "time_ago_minutes": "{n}分钟前",
+    "time_ago_hours": "{n}小时前",
+    "time_ago_days": "{n}天前"
   },
   "translate_page": {
     "placeholder_source": "输入要翻译的文字",
