@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/svelte";
 import type { ProviderConfig } from "$lib/schemas";
+import { get } from "svelte/store";
 import {
   settingsStore,
   upsertProviderConfig,
@@ -357,6 +358,57 @@ describe("Settings page", () => {
         models: ["m1"],
         defaultModel: "m1",
       });
+
+      render(Page);
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      await fireEvent.click(screen.getByTestId("delete-button"));
+
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
+    });
+  });
+
+  describe("delete preset provider config", () => {
+    it("shows the delete button for a configured preset in edit mode", async () => {
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
+
+      render(Page);
+      await fireEvent.click(screen.getByTestId("provider-item"));
+
+      expect(screen.getByTestId("delete-button")).toBeInTheDocument();
+    });
+
+    it("removes the preset config from the list after delete + confirm", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
+
+      render(Page);
+      expect(screen.getAllByTestId("provider-item")).toHaveLength(1);
+
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      await fireEvent.click(screen.getByTestId("delete-button"));
+
+      await waitFor(() => {
+        expect(screen.queryAllByTestId("provider-item")).toHaveLength(0);
+      });
+    });
+
+    it("clears activeProviderId when the deleted preset was active", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
+      setActiveProvider("openai");
+
+      render(Page);
+      await fireEvent.click(screen.getByTestId("provider-item"));
+      await fireEvent.click(screen.getByTestId("delete-button"));
+
+      await waitFor(() => {
+        expect(get(settingsStore).activeProviderId).toBeNull();
+      });
+    });
+
+    it("does NOT delete a preset when confirm returns false", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      upsertProviderConfig(presetConfig({ apiKey: "sk-x" }));
 
       render(Page);
       await fireEvent.click(screen.getByTestId("provider-item"));

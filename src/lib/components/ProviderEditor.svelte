@@ -578,7 +578,7 @@
       >
         {$_("settings_page.button_save")}
       </Button>
-      {#if isCustomEdit && ondelete}
+      {#if mode === "edit" && ondelete}
         <Button
           variant="destructive"
           data-testid="delete-button"
