@@ -86,8 +86,11 @@ test.describe("Translate page", () => {
     await expect(warning).toBeVisible();
     await expect(warning).toContainText("API 키");
     await expect(
-      warning.locator('button[data-testid="warning-open-settings"]'),
+      warning.locator('a[data-testid="warning-open-settings"]'),
     ).toBeVisible();
+    await expect(
+      warning.locator('a[data-testid="warning-open-settings"]'),
+    ).toHaveAttribute("href", "/settings");
   });
 
   test("shows warning when no active provider is set", async ({ page }) => {

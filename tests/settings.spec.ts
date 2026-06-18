@@ -1,16 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
-async function openSettingsModal(page: Page): Promise<void> {
-  await page.goto("/");
-  // Sidebar lives in the layout, present on every page.
-  await page.getByTestId("settings-popover-trigger").click();
-  // Popover content renders conditionally; click the provider-settings menu item.
-  await page.getByTestId("popover-provider-settings").click();
-  // Wait for the bits-ui Dialog to be visible before interacting with its contents.
-  await page.getByRole("dialog").waitFor({ state: "visible" });
-}
-
-test.describe("Settings modal", () => {
+test.describe("Settings page", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       try {
@@ -24,7 +14,7 @@ test.describe("Settings modal", () => {
   test("renders the security notice mentioning localStorage", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
     const notice = page.getByTestId("security-notice");
     await expect(notice).toBeVisible();
     await expect(notice).toContainText("localStorage");
@@ -33,7 +23,7 @@ test.describe("Settings modal", () => {
   test("shows the empty list state when no providers are configured", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
     await expect(page.getByTestId("provider-list")).toBeVisible();
     await expect(page.getByTestId("provider-list-empty")).toBeVisible();
     await expect(page.getByTestId("editor-empty")).toBeVisible();
@@ -42,7 +32,7 @@ test.describe("Settings modal", () => {
   test("configures a preset via the new-provider flow and persists to localStorage", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
     await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
     // Open the picker and choose the preset option.
@@ -87,7 +77,7 @@ test.describe("Settings modal", () => {
   test("adds a custom provider via the new custom flow and sees it in the list", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
     await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
     await page.getByTestId("new-provider-button").click();
@@ -106,7 +96,7 @@ test.describe("Settings modal", () => {
   test("adds a provider via the openai-compat template with pre-filled models", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
     await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
     await page.getByTestId("new-provider-button").click();
@@ -128,7 +118,7 @@ test.describe("Settings modal", () => {
   test("shows a Korean error when the custom form has an empty name", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
 
     await page.getByTestId("new-provider-button").click();
     await page.getByTestId("custom-option").click();
@@ -143,7 +133,7 @@ test.describe("Settings modal", () => {
   test("edits and saves a custom provider API key, then deletes it with confirm", async ({
     page,
   }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
 
     // Add a custom provider first.
     await page.getByTestId("new-provider-button").click();
@@ -191,7 +181,7 @@ test.describe("Settings modal", () => {
   });
 
   test("sets the active provider via the list button", async ({ page }) => {
-    await openSettingsModal(page);
+    await page.goto("/settings");
 
     // Configure OpenAI (becomes active as the first provider).
     await page.getByTestId("new-provider-button").click();

@@ -9,47 +9,11 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Separator from "$lib/components/ui/separator/index.js";
   import LanguageSwitcher from "./LanguageSwitcher.svelte";
-  import SettingsDialog from "./SettingsDialog.svelte";
-  import GlossaryDialog from "./GlossaryDialog.svelte";
-  import {
-    settingsOpen as settingsOpenStore,
-  } from "$lib/stores/ui";
 
   let open = $state(false);
 
-  // Dialog open state lives here so the popover can close itself before the
-  // modal layer takes over (prevents the popover overlapping the dialog).
-  // The local `$state` is what `<SettingsDialog bind:open>` writes to; we
-  // mirror it into the shared `settingsOpenStore` so other components (e.g.
-  // the "no API key" warning on +page.svelte) can open the modal without a
-  // ref to this component. Svelte 5 doesn't support `bind:open={$store}`
-  // directly, so we sync the two via effects below.
-  let settingsOpen = $state(false);
-  let glossaryOpen = $state(false);
-
-  // Store → local: a `true` store value opens the dialog.
-  $effect(() => {
-    if ($settingsOpenStore) settingsOpen = true;
-  });
-  // Local → store: when the dialog closes locally (bits-ui escape / outside
-  // click, or our own openProviders path), reset the shared trigger so future
-  // `openSettings()` calls re-fire.
-  $effect(() => {
-    if (!settingsOpen) settingsOpenStore.set(false);
-  });
-
   function toggle(): void {
     open = !open;
-  }
-
-  function openProviders(): void {
-    open = false;
-    settingsOpen = true;
-  }
-
-  function openGlossary(): void {
-    open = false;
-    glossaryOpen = true;
   }
 
   // The popover wrapper stops click propagation (see markup), so any click
@@ -59,7 +23,7 @@
   //
   // We listen to `pointerdown` in the CAPTURE phase (not `click`) because
   // bits-ui selects items and tears down the Select content synchronously on
-  // the item's `pointerdown`. By the time a bubbled `click` reaches `window`,
+  // the item's `pointerdown`. By the time a bubbled `click` reached `window`,
   // the portaled `[data-slot="select-content"]` node is already detached, so a
   // `closest()` check would miss it. Capture-phase `pointerdown` runs before
   // bits-ui's own handler, so the portal is still mounted when we inspect it.
@@ -111,26 +75,24 @@
       role="menu"
       class="absolute bottom-full left-0 right-0 mb-2 z-50 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
     >
-      <button
-        type="button"
+      <a
+        href="/settings"
         role="menuitem"
         data-testid="popover-provider-settings"
         class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-        onclick={openProviders}
       >
         <Settings class="h-4 w-4" />
         {$_("nav.provider_settings")}
-      </button>
-      <button
-        type="button"
+      </a>
+      <a
+        href="/glossary"
         role="menuitem"
         data-testid="popover-glossary"
         class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-        onclick={openGlossary}
       >
         <BookOpen class="h-4 w-4" />
         {$_("nav.glossary")}
-      </button>
+      </a>
       <a
         href="/history"
         role="menuitem"
@@ -165,6 +127,3 @@
     </div>
   {/if}
 </div>
-
-<SettingsDialog bind:open={settingsOpen} />
-<GlossaryDialog bind:open={glossaryOpen} />
