@@ -20,6 +20,7 @@
     extractTextFromFile,
     UnsupportedFileTypeError,
   } from "$lib/file/extractText";
+  import { openSettings } from "$lib/stores/ui";
 
   function handleToggleGlossary(): void {
     glossaryStore.update((g) => ({ ...g, enabled: !g.enabled }));
@@ -209,12 +210,14 @@
           ? $_("errors.NO_API_KEY")
           : $_("errors.NO_ACTIVE_PROVIDER")}
       </span>
-      <a
-        href="/settings"
+      <button
+        type="button"
+        data-testid="warning-open-settings"
+        onclick={openSettings}
         class="text-sm text-primary hover:underline font-medium whitespace-nowrap"
       >
         {$_("translate_page.link_to_settings")}
-      </a>
+      </button>
     </div>
   {/if}
 
