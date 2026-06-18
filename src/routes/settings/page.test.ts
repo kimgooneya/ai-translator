@@ -48,6 +48,21 @@ describe("Settings page", () => {
       const notice = screen.getByTestId("security-notice");
       expect(notice.className).toContain("yellow");
     });
+
+    it("hides the security notice after the close button is clicked", async () => {
+      render(Page);
+      const notice = screen.getByTestId("security-notice");
+      expect(notice).toBeInTheDocument();
+
+      await fireEvent.click(within(notice).getByRole("button"));
+
+      expect(screen.queryByTestId("security-notice")).toBeNull();
+
+      const raw = localStorage.getItem("translator.dismissedNotices");
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw ?? "[]");
+      expect(parsed).toContain("settings.security-notice");
+    });
   });
 
   describe("title", () => {

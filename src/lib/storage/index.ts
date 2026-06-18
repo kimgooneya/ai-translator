@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   settings: "translator.settings",
   glossary: "translator.glossary",
   history: "translator.history",
+  dismissedNotices: "translator.dismissedNotices",
   theme: "translator.theme",
   locale: "translator.locale",
 } as const;
