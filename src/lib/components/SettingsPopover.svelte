@@ -34,8 +34,23 @@
   }
 
   // The popover wrapper stops click propagation (see markup), so any click
-  // that reaches `window` while open is by definition an outside click.
-  function closeOnOutsideClick(): void {
+  // that reaches `window` while open is by definition an outside click —
+  // except clicks inside a bits-ui portal (e.g. the LanguageSwitcher Select),
+  // which renders to <body> and therefore bypasses the wrapper's stopPropagation.
+  //
+  // We listen to `pointerdown` in the CAPTURE phase (not `click`) because
+  // bits-ui selects items and tears down the Select content synchronously on
+  // the item's `pointerdown`. By the time a bubbled `click` reaches `window`,
+  // the portaled `[data-slot="select-content"]` node is already detached, so a
+  // `closest()` check would miss it. Capture-phase `pointerdown` runs before
+  // bits-ui's own handler, so the portal is still mounted when we inspect it.
+  function closeOnOutsidePress(event: PointerEvent): void {
+    const target = event.target as Element | null;
+    // Trigger: let the button's own `onclick` handle the toggle.
+    if (target?.closest('[data-testid="settings-popover-trigger"]')) return;
+    if (target?.closest('[data-testid="settings-popover-content"]')) return;
+    // bits-ui Select content is portaled to <body>; treat it as inside.
+    if (target?.closest('[data-slot="select-content"]')) return;
     open = false;
   }
 
@@ -45,10 +60,10 @@
 
   $effect(() => {
     if (!open) return;
-    window.addEventListener("click", closeOnOutsideClick);
+    window.addEventListener("pointerdown", closeOnOutsidePress, true);
     window.addEventListener("keydown", closeOnEscape);
     return () => {
-      window.removeEventListener("click", closeOnOutsideClick);
+      window.removeEventListener("pointerdown", closeOnOutsidePress, true);
       window.removeEventListener("keydown", closeOnEscape);
     };
   });
