@@ -179,7 +179,7 @@ test.describe("History page", () => {
     expect(responsePreview?.endsWith("...")).toBe(true);
   });
 
-  test("opens the detail modal with full content when 자세히 is clicked", async ({
+  test("opens the detail panel with full content when 자세히 is clicked", async ({
     page,
   }) => {
     const longSource = "x".repeat(80);
@@ -220,7 +220,7 @@ test.describe("History page", () => {
     );
   });
 
-  test("closes the detail modal when the close button is clicked", async ({
+  test("closes the detail panel when the close button is clicked", async ({
     page,
   }) => {
     await seedHistory(page, makeEntries(1));
@@ -230,21 +230,6 @@ test.describe("History page", () => {
     await expect(page.getByTestId("history-detail-modal")).toBeVisible();
 
     await page.getByTestId("history-detail-close").click();
-    await expect(page.getByTestId("history-detail-modal")).toHaveCount(0);
-  });
-
-  test("closes the detail modal when the backdrop is clicked", async ({
-    page,
-  }) => {
-    await seedHistory(page, makeEntries(1));
-    await page.goto("/history");
-
-    await page.getByTestId("history-detail-button").click();
-    await expect(page.getByTestId("history-detail-modal")).toBeVisible();
-
-    await page
-      .getByTestId("history-detail-backdrop")
-      .click({ position: { x: 5, y: 5 } });
     await expect(page.getByTestId("history-detail-modal")).toHaveCount(0);
   });
 

@@ -7,7 +7,7 @@
     clearHistory,
   } from "$lib/stores/history";
   import HistoryList from "$lib/components/HistoryList.svelte";
-  import HistoryDetailModal from "$lib/components/HistoryDetailModal.svelte";
+  import HistoryDetailInline from "$lib/components/HistoryDetailInline.svelte";
   import { Button } from "$lib/components/ui/button/index.js";
 
   let entries = $derived($historyStore);
@@ -54,6 +54,10 @@
     </Button>
   </header>
 
+  {#if selected}
+    <HistoryDetailInline entry={selected} onclose={handleCloseDetail} />
+  {/if}
+
   <section class="flex flex-col gap-3">
     {#if entries.length === 0}
       <p
@@ -75,5 +79,3 @@
     <p data-testid="history-limit-notice">{$_("history_page.limit_notice")}</p>
   </footer>
 </div>
-
-<HistoryDetailModal entry={selected} onclose={handleCloseDetail} />
