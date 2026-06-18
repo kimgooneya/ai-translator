@@ -9,6 +9,7 @@
   import { getProviderById } from "$lib/providers/registry";
   import { _ } from "svelte-i18n";
   import type { Provider, ProviderConfig } from "$lib/schemas";
+  import DismissibleNotice from "./DismissibleNotice.svelte";
   import ProviderList from "./ProviderList.svelte";
   import ProviderEditor from "./ProviderEditor.svelte";
 
@@ -91,14 +92,12 @@
     </h1>
   </header>
 
-  <div
-    data-testid="security-notice"
-    class="border border-yellow-200 bg-yellow-50 rounded-md p-4 dark:border-yellow-700 dark:bg-yellow-900/30"
-  >
-    <p class="text-sm text-yellow-800 dark:text-yellow-200">
-      {$_("settings_page.security_notice")}
-    </p>
-  </div>
+  <DismissibleNotice
+    id="settings.security-notice"
+    variant="yellow"
+    testId="security-notice"
+    message={$_("settings_page.security_notice")}
+  />
 
   <div class="grid gap-6 md:grid-cols-[300px_1fr]" style="min-height: 480px;">
     <div class="md:h-[600px]">

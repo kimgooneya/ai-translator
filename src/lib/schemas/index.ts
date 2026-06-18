@@ -70,6 +70,8 @@ export const translationHistoryEntrySchema = z.object({
   tokensUsed: z.number().int().nonnegative().optional(),
 });
 
+export const dismissedNoticesSchema = z.array(z.string().min(1));
+
 export type Provider = z.infer<typeof providerSchema>;
 export type ProviderConfig = z.infer<typeof providerConfigSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
@@ -79,3 +81,4 @@ export type TranslationRequest = z.infer<typeof translationRequestSchema>;
 export type TranslationHistoryEntry = z.infer<
   typeof translationHistoryEntrySchema
 >;
+export type DismissedNotices = z.infer<typeof dismissedNoticesSchema>;
