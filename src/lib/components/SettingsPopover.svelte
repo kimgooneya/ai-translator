@@ -11,13 +11,32 @@
   import LanguageSwitcher from "./LanguageSwitcher.svelte";
   import SettingsDialog from "./SettingsDialog.svelte";
   import GlossaryDialog from "./GlossaryDialog.svelte";
+  import {
+    settingsOpen as settingsOpenStore,
+  } from "$lib/stores/ui";
 
   let open = $state(false);
 
   // Dialog open state lives here so the popover can close itself before the
   // modal layer takes over (prevents the popover overlapping the dialog).
+  // The local `$state` is what `<SettingsDialog bind:open>` writes to; we
+  // mirror it into the shared `settingsOpenStore` so other components (e.g.
+  // the "no API key" warning on +page.svelte) can open the modal without a
+  // ref to this component. Svelte 5 doesn't support `bind:open={$store}`
+  // directly, so we sync the two via effects below.
   let settingsOpen = $state(false);
   let glossaryOpen = $state(false);
+
+  // Store → local: a `true` store value opens the dialog.
+  $effect(() => {
+    if ($settingsOpenStore) settingsOpen = true;
+  });
+  // Local → store: when the dialog closes locally (bits-ui escape / outside
+  // click, or our own openProviders path), reset the shared trigger so future
+  // `openSettings()` calls re-fire.
+  $effect(() => {
+    if (!settingsOpen) settingsOpenStore.set(false);
+  });
 
   function toggle(): void {
     open = !open;

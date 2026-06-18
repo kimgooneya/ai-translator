@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import type { Writable } from "svelte/store";
+import { get } from "svelte/store";
 import Page from "./+page.svelte";
 import { settingsStore } from "$lib/stores/settings";
 import { glossaryStore } from "$lib/stores/glossary";
 import { historyStore } from "$lib/stores/history";
+import { settingsOpen, closeSettings } from "$lib/stores/ui";
 import type { Settings, TranslationHistoryEntry } from "$lib/schemas";
 import { extractTextFromFile, UnsupportedFileTypeError } from "$lib/file/extractText";
 
@@ -72,6 +74,7 @@ describe("Translate page", () => {
     settingsStore.set(emptySettings);
     glossaryStore.set({ enabled: false, entries: [] });
     historyStore.set([]);
+    closeSettings();
     vi.mocked(extractTextFromFile).mockReset();
     vi.mocked(extractTextFromFile).mockImplementation(async (file: File) => {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -178,11 +181,17 @@ describe("Translate page", () => {
       expect(screen.getByTestId("no-api-key-warning")).toBeVisible();
     });
 
-    it("includes a link to settings page", () => {
+    it("includes a button that opens the settings modal", async () => {
       render(Page);
-      const link = screen.getByTestId("no-api-key-warning").querySelector("a");
-      expect(link).not.toBeNull();
-      expect(link?.getAttribute("href")).toBe("/settings");
+      const button = screen
+        .getByTestId("no-api-key-warning")
+        .querySelector("button");
+      expect(button).not.toBeNull();
+      expect(button?.getAttribute("data-testid")).toBe("warning-open-settings");
+
+      expect(get(settingsOpen)).toBe(false);
+      await fireEvent.click(button as HTMLElement);
+      expect(get(settingsOpen)).toBe(true);
     });
 
     it("hides warning when API key is configured", () => {

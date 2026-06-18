@@ -61,7 +61,7 @@ npm run build         # Production build
 
 ## Usage
 
-1. **Add API key** — Go to /settings, select your provider, paste your API key
+1. **Add API key** — Open settings (sidebar gear icon → Provider settings), select your provider, paste your API key
 2. **Translate** — Go to /, enter source text, select target language, click Translate
 3. **(Optional) Advanced options** — Enable custom prompt or glossary
 4. **History** — Past translations saved at /history
@@ -112,7 +112,6 @@ src/
     utils.ts             # cn() class merge helper
   routes/
     api/translate/       # POST /api/translate (streaming endpoint)
-    settings/            # /settings
     glossary/            # /glossary
     history/             # /history
 ```
