@@ -1,6 +1,50 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-test.describe("Settings page", () => {
+// Managed-key model: the settings page no longer has a provider editor or any
+// API-key entry. It renders the admin-managed provider catalog (served by
+// GET /api/user/providers) and lets the user pick an active provider + model.
+// Keys are handled by the admin — the client never sees one.
+
+// The catalog literal must live inside addInitScript callbacks / route handlers
+// (only the function body is serialized to the page).
+const OPENAI_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"];
+const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-pro-preview"];
+
+function catalogBody(): string {
+  return JSON.stringify({
+    providers: [
+      {
+        id: "openai",
+        name: "OpenAI",
+        kind: "preset",
+        baseURL: "https://api.openai.com/v1",
+        models: OPENAI_MODELS,
+        defaultModel: "gpt-5.4-mini",
+      },
+      {
+        id: "gemini",
+        name: "Google Gemini",
+        kind: "preset",
+        baseURL:
+          "https://generativelanguage.googleapis.com/v1beta/openai/",
+        models: GEMINI_MODELS,
+        defaultModel: "gemini-3.5-flash",
+      },
+    ],
+  });
+}
+
+async function mockCatalog(page: Page, body = catalogBody()): Promise<void> {
+  await page.route("**/api/user/providers", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body,
+    });
+  });
+}
+
+test.describe("Settings page (managed-key catalog)", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       try {
@@ -11,208 +55,119 @@ test.describe("Settings page", () => {
     });
   });
 
-  test("renders the security notice mentioning localStorage", async ({
-    page,
-  }) => {
+  test("renders the managed-key security notice", async ({ page }) => {
+    await mockCatalog(page);
     await page.goto("/settings");
+
     const notice = page.getByTestId("security-notice");
     await expect(notice).toBeVisible();
-    await expect(notice).toContainText("localStorage");
+    // The notice explains the admin-managed model (no localStorage / BYOK).
+    await expect(notice).toContainText("관리자");
   });
 
-  test("shows the empty list state when no providers are configured", async ({
+  test("shows the empty state when the provider catalog is empty", async ({
     page,
   }) => {
+    await mockCatalog(page, JSON.stringify({ providers: [] }));
     await page.goto("/settings");
-    await expect(page.getByTestId("provider-list")).toBeVisible();
+
     await expect(page.getByTestId("provider-list-empty")).toBeVisible();
-    await expect(page.getByTestId("editor-empty")).toBeVisible();
   });
 
-  test("configures a preset via the new-provider flow and persists to localStorage", async ({
+  test("shows a loading message while the catalog is fetching, then providers", async ({
     page,
   }) => {
+    await mockCatalog(page);
     await page.goto("/settings");
-    await expect(page.getByTestId("provider-item")).toHaveCount(0);
 
-    // Open the picker and choose the preset option.
-    await page.getByTestId("new-provider-button").click();
-    await expect(page.getByTestId("editor-picker")).toBeVisible();
-    await page.getByTestId("preset-option").click();
-
-    // Pick OpenAI from the preset-select (bits-ui Select).
-    await page.getByTestId("preset-select").click();
-    await page.getByRole("option", { name: "OpenAI" }).click();
-
-    // Enter an API key and save.
-    await page.getByTestId("api-key-input").fill("sk-e2e-preset-key");
-    await page.getByTestId("save-button").click();
-
-    // The provider now appears in the list and is the active provider.
+    await expect(page.getByTestId("provider-item")).toHaveCount(2);
     await expect(
-      page.locator('[data-testid="provider-item"][data-provider-id="openai"]'),
+      page.locator(
+        '[data-testid="provider-item"][data-provider-id="openai"]',
+      ),
     ).toBeVisible();
     await expect(
-      page
-        .locator('[data-testid="provider-item"][data-provider-id="openai"]')
-        .getByTestId("active-badge"),
+      page.locator(
+        '[data-testid="provider-item"][data-provider-id="gemini"]',
+      ),
     ).toBeVisible();
+  });
+
+  test("sets the active provider via the list button and persists selection (no apiKey)", async ({
+    page,
+  }) => {
+    await mockCatalog(page);
+    await page.goto("/settings");
+
+    // OpenAI is the first provider and not active yet.
+    const geminiRow = page.locator(
+      '[data-testid="provider-item"][data-provider-id="gemini"]',
+    );
+    await geminiRow.getByTestId("set-active-button").click();
+
+    await expect(geminiRow.getByTestId("active-badge")).toBeVisible();
 
     const raw = await page.evaluate(() =>
       localStorage.getItem("translator.settings"),
     );
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw ?? "{}");
-    expect(parsed.providers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          providerId: "openai",
-          apiKey: "sk-e2e-preset-key",
+    expect(parsed.activeProviderId).toBe("gemini");
+    // Managed-key invariant: settings carry NO api key.
+    const configs = parsed.providers as Array<Record<string, unknown>>;
+    for (const cfg of configs) {
+      expect(cfg).not.toHaveProperty("apiKey");
+    }
+  });
+
+  test("shows the model select for the active provider and persists a choice", async ({
+    page,
+  }) => {
+    // Seed an already-active OpenAI provider (no apiKey). A legacy top-level
+    // `apiKey` is also seeded to assert the schema strips it on load — managed
+    // settings must never leak a key back into localStorage.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "translator.settings",
+        JSON.stringify({
+          providers: [{ providerId: "openai", selectedModel: "gpt-5.4-mini" }],
+          activeProviderId: "openai",
+          defaultTargetLang: "ko",
+          apiKey: "sk-legacy",
         }),
-      ]),
-    );
-    expect(parsed.activeProviderId).toBe("openai");
-  });
-
-  test("adds a custom provider via the new custom flow and sees it in the list", async ({
-    page,
-  }) => {
-    await page.goto("/settings");
-    await expect(page.getByTestId("provider-item")).toHaveCount(0);
-
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("custom-option").click();
-
-    await page.getByTestId("name-input").fill("MyProvider");
-    await page.getByTestId("base-url-input").fill("https://api.test.com/v1");
-    await page.getByTestId("models-input").fill("m1, m2");
-    await page.getByTestId("save-button").click();
-
-    await expect(page.getByTestId("provider-item")).toHaveCount(1);
-    await expect(page.getByText("MyProvider", { exact: true })).toBeVisible();
-    await expect(page.getByText("커스텀").first()).toBeVisible();
-  });
-
-  test("adds a provider via the openai-compat template with pre-filled models", async ({
-    page,
-  }) => {
-    await page.goto("/settings");
-    await expect(page.getByTestId("provider-item")).toHaveCount(0);
-
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("openai-compat-option").click();
-
-    await expect(page.getByTestId("name-input")).toHaveValue("OpenAI 호환");
-    await expect(page.getByTestId("models-input")).toHaveValue(
-      "gpt-5.4, gpt-5.4-mini",
-    );
-
-    await page.getByTestId("base-url-input").fill("https://api.openrouter.ai/v1");
-    await page.getByTestId("save-button").click();
-
-    await expect(page.getByTestId("provider-item")).toHaveCount(1);
-    await expect(page.getByText("OpenAI 호환", { exact: true })).toBeVisible();
-    await expect(page.getByText("커스텀").first()).toBeVisible();
-  });
-
-  test("shows a Korean error when the custom form has an empty name", async ({
-    page,
-  }) => {
-    await page.goto("/settings");
-
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("custom-option").click();
-    await page.getByTestId("base-url-input").fill("https://api.test.com/v1");
-    await page.getByTestId("models-input").fill("m1");
-
-    await expect(page.getByTestId("error-name")).toHaveText(
-      "이름을 입력하세요.",
-    );
-  });
-
-  test("edits and saves a custom provider API key, then deletes it with confirm", async ({
-    page,
-  }) => {
-    await page.goto("/settings");
-
-    // Add a custom provider first.
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("custom-option").click();
-    await page.getByTestId("name-input").fill("Deletable");
-    await page.getByTestId("base-url-input").fill("https://api.del.com/v1");
-    await page.getByTestId("models-input").fill("m1");
-    await page.getByTestId("save-button").click();
-
-    await expect(page.getByTestId("provider-item")).toHaveCount(1);
-
-    // Open it in the editor and set an API key.
-    await page.locator('[data-testid="provider-item"]').first().click();
-    await page.getByTestId("api-key-input").fill("sk-custom-key");
-    await page.getByTestId("save-button").click();
-
-    const raw = await page.evaluate(() =>
-      localStorage.getItem("translator.settings"),
-    );
-    const parsed = JSON.parse(raw ?? "{}");
-    expect(parsed.providers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          apiKey: "sk-custom-key",
-          name: "Deletable",
-        }),
-      ]),
-    );
-
-    // Re-open and delete via confirm dialog.
-    await page.locator('[data-testid="provider-item"]').first().click();
-    await expect(page.getByTestId("delete-button")).toBeVisible();
-
-    const dialogMessage = new Promise<string>((resolve) => {
-      page.on("dialog", async (dialog) => {
-        resolve(await dialog.message());
-        await dialog.accept();
-      });
+      );
     });
-    await page.getByTestId("delete-button").click();
-    expect(await dialogMessage).toContain("삭제");
-
-    await expect(page.getByTestId("provider-item")).toHaveCount(0);
-    await expect(page.getByText("Deletable", { exact: true })).toHaveCount(0);
-  });
-
-  test("sets the active provider via the list button", async ({ page }) => {
+    await mockCatalog(page);
     await page.goto("/settings");
 
-    // Configure OpenAI (becomes active as the first provider).
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("preset-option").click();
-    await page.getByTestId("preset-select").click();
-    await page.getByRole("option", { name: "OpenAI" }).click();
-    await page.getByTestId("api-key-input").fill("sk-openai");
-    await page.getByTestId("save-button").click();
+    // The active-provider model picker is present.
+    await expect(page.getByTestId("active-provider-model")).toBeVisible();
 
-    // Add a custom provider (not active).
-    await page.getByTestId("new-provider-button").click();
-    await page.getByTestId("custom-option").click();
-    await page.getByTestId("name-input").fill("Custom");
-    await page.getByTestId("base-url-input").fill("https://api.custom.com/v1");
-    await page.getByTestId("models-input").fill("m1");
-    await page.getByTestId("save-button").click();
+    // bits-ui Select: click the trigger, then pick an option by role.
+    await page.getByTestId("model-select").click();
+    await page.getByRole("option", { name: "gpt-5.5" }).click();
 
-    await expect(page.getByTestId("provider-item")).toHaveCount(2);
+    await expect
+      .poll(async () => {
+        const raw = await page.evaluate(() =>
+          localStorage.getItem("translator.settings"),
+        );
+        return JSON.parse(raw ?? "{}");
+      })
+      .toMatchObject({
+        providers: [
+          expect.objectContaining({
+            providerId: "openai",
+            selectedModel: "gpt-5.5",
+          }),
+        ],
+        activeProviderId: "openai",
+      });
 
-    // Click set-active on the custom provider row.
-    const customRow = page
-      .locator('[data-testid="provider-item"]')
-      .filter({ hasText: "Custom" });
-    await customRow.getByTestId("set-active-button").click();
-
-    await expect(customRow.getByTestId("active-badge")).toBeVisible();
-
+    // Legacy BYOK fields are stripped — no apiKey anywhere in settings.
     const raw = await page.evaluate(() =>
       localStorage.getItem("translator.settings"),
     );
-    const parsed = JSON.parse(raw ?? "{}");
-    expect(parsed.activeProviderId).toMatch(/^custom-/);
-  });
-});
+    expect(raw).not.toContain("apiKey");
+    expect(raw).not.toContain("sk-legacy");
+  });});

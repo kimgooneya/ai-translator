@@ -1,22 +1,37 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// The settings literal must live inside seedSettings(): addInitScript only
-// serializes the function body, so module-scope consts are undefined in-page.
+// Managed-key: settings carry no apiKey. Translate-dependent tests mock
+// GET /api/user/providers so the page has an active provider.
 function seedSettings(): void {
   localStorage.setItem(
     "translator.settings",
     JSON.stringify({
-      providers: [
-        {
-          providerId: "openai",
-          apiKey: "sk-e2e-key",
-          selectedModel: "gpt-4o-mini",
-        },
-      ],
+      providers: [{ providerId: "openai", selectedModel: "gpt-5.4-mini" }],
       activeProviderId: "openai",
       defaultTargetLang: "ko",
     }),
   );
+}
+
+async function mockCatalog(page: Page): Promise<void> {
+  await page.route("**/api/user/providers", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        providers: [
+          {
+            id: "openai",
+            name: "OpenAI",
+            kind: "preset",
+            baseURL: "https://api.openai.com/v1",
+            models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+            defaultModel: "gpt-5.4-mini",
+          },
+        ],
+      }),
+    });
+  });
 }
 
 // Surface unhandled page errors as test failures instead of letting them
@@ -60,6 +75,7 @@ test.describe("Toast notifications (svelte-sonner)", () => {
   test("shows an error toast with a Korean message on a 401 from /api/translate", async ({
     page,
   }) => {
+    await mockCatalog(page);
     await page.addInitScript(seedSettings);
     await page.route("**/api/translate", async (route) => {
       await route.fulfill({
@@ -103,6 +119,7 @@ test.describe("Toast notifications (svelte-sonner)", () => {
     // null), which makes the swipe silently no-op.
     await page.setViewportSize({ width: 1280, height: 1000 });
 
+    await mockCatalog(page);
     await page.addInitScript(seedSettings);
     await page.route("**/api/translate", async (route) => {
       await route.fulfill({

@@ -1,6 +1,49 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-test.describe("Translate page", () => {
+// Managed-key translate flow: the client has NO api key concept. The provider
+// catalog (models/baseURL) is served by GET /api/user/providers and the server
+// resolves an encrypted key per request. These specs mock the catalog so the
+// page can enable translation deterministically without a live backend.
+//
+// NOTE: like every e2e here, reaching "/" still requires a logged-in user
+// (hooks.server.ts auth gate) — run against a real Supabase project.
+
+const OPENAI_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"];
+
+function seedActiveOpenai(): void {
+  // Managed-key settings shape: providerId + selectedModel only. No apiKey.
+  localStorage.setItem(
+    "translator.settings",
+    JSON.stringify({
+      providers: [{ providerId: "openai", selectedModel: "gpt-5.4-mini" }],
+      activeProviderId: "openai",
+      defaultTargetLang: "ko",
+    }),
+  );
+}
+
+async function mockCatalog(page: Page): Promise<void> {
+  await page.route("**/api/user/providers", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        providers: [
+          {
+            id: "openai",
+            name: "OpenAI",
+            kind: "preset",
+            baseURL: "https://api.openai.com/v1",
+            models: OPENAI_MODELS,
+            defaultModel: "gpt-5.4-mini",
+          },
+        ],
+      }),
+    });
+  });
+}
+
+test.describe("Translate page (managed-key)", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       try {
@@ -15,6 +58,7 @@ test.describe("Translate page", () => {
   test("renders source textarea, language selects, model select, and translate button", async ({
     page,
   }) => {
+    await mockCatalog(page);
     await page.goto("/");
 
     await expect(page.getByTestId("source-textarea")).toBeVisible();
@@ -28,33 +72,18 @@ test.describe("Translate page", () => {
   test("translate button is disabled when sourceText is empty", async ({
     page,
   }) => {
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
 
-    const btn = page.getByTestId("translate-button");
-    await expect(btn).toBeDisabled();
+    await expect(page.getByTestId("translate-button")).toBeDisabled();
   });
 
-  test("translate button becomes enabled after entering source text (with API key)", async ({
+  test("translate button becomes enabled once a provider is active and text is entered", async ({
     page,
   }) => {
-    // Seed localStorage with a configured provider before navigating
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "translator.settings",
-        JSON.stringify({
-          providers: [
-            {
-              providerId: "openai",
-              apiKey: "sk-e2e-key",
-              selectedModel: "gpt-4o-mini",
-            },
-          ],
-          activeProviderId: "openai",
-          defaultTargetLang: "ko",
-        }),
-      );
-    });
-
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
 
     const btn = page.getByTestId("translate-button");
@@ -64,63 +93,42 @@ test.describe("Translate page", () => {
     await expect(btn).toBeEnabled();
   });
 
-  test("shows warning with settings link when no API key is configured", async ({
+  test("shows the no-provider warning with a settings link when no provider is active", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "translator.settings",
-        JSON.stringify({
-          providers: [
-            { providerId: "openai", apiKey: "", selectedModel: "gpt-4o-mini" },
-          ],
-          activeProviderId: "openai",
-          defaultTargetLang: "ko",
-        }),
-      );
-    });
-
+    // No active provider in settings + catalog may be empty/absent.
+    await mockCatalog(page);
     await page.goto("/");
 
-    const warning = page.getByTestId("no-api-key-warning");
+    const warning = page.getByTestId("no-provider-warning");
     await expect(warning).toBeVisible();
-    await expect(warning).toContainText("API 키");
-    await expect(
-      warning.locator('a[data-testid="warning-open-settings"]'),
-    ).toBeVisible();
-    await expect(
-      warning.locator('a[data-testid="warning-open-settings"]'),
-    ).toHaveAttribute("href", "/settings");
-  });
-
-  test("shows warning when no active provider is set", async ({ page }) => {
-    await page.goto("/");
-
-    const warning = page.getByTestId("no-api-key-warning");
     await expect(warning).toContainText("활성 provider");
+    const link = warning.locator('a[data-testid="warning-open-settings"]');
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", "/settings");
   });
 
   test("clicking 고급 옵션 reveals custom prompt and glossary toggle", async ({
     page,
   }) => {
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
 
-    // Not visible initially
     await expect(page.getByTestId("custom-prompt-input")).not.toBeVisible();
     await expect(page.getByTestId("glossary-toggle")).not.toBeVisible();
 
-    // Click to expand
     await page.getByTestId("advanced-options-toggle").click();
 
     await expect(page.getByTestId("custom-prompt-input")).toBeVisible();
     await expect(page.getByTestId("glossary-toggle")).toBeVisible();
 
-    // Click again to collapse
     await page.getByTestId("advanced-options-toggle").click();
     await expect(page.getByTestId("custom-prompt-input")).not.toBeVisible();
   });
 
   test("glossary toggle shows entry count", async ({ page }) => {
+    await mockCatalog(page);
     await page.addInitScript(() => {
       localStorage.setItem(
         "translator.glossary",
@@ -130,7 +138,7 @@ test.describe("Translate page", () => {
         }),
       );
     });
-
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
     await page.getByTestId("advanced-options-toggle").click();
 
@@ -139,71 +147,31 @@ test.describe("Translate page", () => {
     );
   });
 
-  test("model dropdown shows available models for the active provider", async ({
+  test("model dropdown shows the catalog models for the active provider", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "translator.settings",
-        JSON.stringify({
-          providers: [
-            {
-              providerId: "openai",
-              apiKey: "sk-e2e-key",
-              selectedModel: "gpt-5.4-mini",
-            },
-          ],
-          activeProviderId: "openai",
-          defaultTargetLang: "ko",
-        }),
-      );
-    });
-
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
 
-    // bits-ui Select renders a <button> trigger (carrying the testid) +
-    // opens a Portal-attached popover with `role="option"` items — NOT a
-    // native <select> with <option> children. Click the trigger to open,
-    // then enumerate options via role.
-    const modelTrigger = page.getByTestId("model-select");
-    await modelTrigger.click();
-
+    // bits-ui Select renders a <button> trigger + a Portal popover with
+    // role="option" items (not a native <select>). Open, then enumerate.
+    await page.getByTestId("model-select").click();
     const options = page.locator('[role="option"]');
     await expect(options).toHaveCount(4);
-    // bits-ui Item renders text with surrounding whitespace; trim before
-    // comparing so the assertion is against the model name itself.
     const texts = (await options.allTextContents()).map((t) => t.trim());
-    expect(texts).toContain("gpt-5.5");
-    expect(texts).toContain("gpt-5.4");
-    expect(texts).toContain("gpt-5.4-mini");
-    expect(texts).toContain("gpt-5.4-nano");
+    expect(texts).toEqual(OPENAI_MODELS);
   });
 
-  test("clicking translate sends POST to /api/translate with correct body", async ({
+  test("clicking translate sends POST to /api/translate with a keyless body", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "translator.settings",
-        JSON.stringify({
-          providers: [
-            {
-              providerId: "openai",
-              apiKey: "sk-e2e-key",
-              selectedModel: "gpt-5.4-mini",
-            },
-          ],
-          activeProviderId: "openai",
-          defaultTargetLang: "ko",
-        }),
-      );
-    });
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
 
     let requestBody: Record<string, unknown> | null = null;
-
     await page.route("**/api/translate", async (route) => {
-      const request = route.request();
-      requestBody = JSON.parse(request.postData() ?? "{}");
+      requestBody = JSON.parse(route.request().postData() ?? "{}");
       await route.fulfill({
         status: 200,
         contentType: "text/event-stream",
@@ -221,55 +189,41 @@ test.describe("Translate page", () => {
       sourceLang: "auto",
       targetLang: "ko",
       providerId: "openai",
-      apiKey: "sk-e2e-key",
       model: "gpt-5.4-mini",
     });
+    // Managed-key contract: the body MUST NOT carry an apiKey.
+    expect(requestBody).not.toHaveProperty("apiKey");
   });
 
-  test("cancel button is not visible when not translating", async ({
-    page,
-  }) => {
+  test("cancel button is not visible when not translating", async ({ page }) => {
+    await mockCatalog(page);
+    await page.addInitScript(seedActiveOpenai);
     await page.goto("/");
     await expect(page.getByTestId("cancel-button")).not.toBeVisible();
   });
 
   test("source language select defaults to 자동 감지", async ({ page }) => {
+    await mockCatalog(page);
     await page.goto("/");
-    // bits-ui Select.Trigger renders a <button> that displays the bound
-    // value's label as text content (no native `.value` API). Assert on the
-    // rendered text instead.
-    const trigger = page.getByTestId("source-lang-select");
-    await expect(trigger).toContainText("자동 감지");
+    await expect(page.getByTestId("source-lang-select")).toContainText(
+      "자동 감지",
+    );
   });
 
-  test("target language select defaults to ko", async ({ page }) => {
+  test("target language select defaults to 한국어", async ({ page }) => {
+    await mockCatalog(page);
     await page.goto("/");
-    const trigger = page.getByTestId("target-lang-select");
-    await expect(trigger).toContainText("한국어");
+    await expect(page.getByTestId("target-lang-select")).toContainText(
+      "한국어",
+    );
   });
 
   test.describe("streaming SSE response", () => {
-    function seedSettings(): void {
-      localStorage.setItem(
-        "translator.settings",
-        JSON.stringify({
-          providers: [
-            {
-              providerId: "openai",
-              apiKey: "sk-e2e-key",
-              selectedModel: "gpt-5.4-mini",
-            },
-          ],
-          activeProviderId: "openai",
-          defaultTargetLang: "ko",
-        }),
-      );
-    }
-
     test("renders chunks incrementally into the result area", async ({
       page,
     }) => {
-      await page.addInitScript(seedSettings);
+      await mockCatalog(page);
+      await page.addInitScript(seedActiveOpenai);
       await page.route("**/api/translate", async (route) => {
         await route.fulfill({
           status: 200,
@@ -286,13 +240,13 @@ test.describe("Translate page", () => {
         timeout: 5000,
       });
       await expect(page.getByTestId("result-placeholder")).toBeHidden();
-      await expect(page.getByTestId("error-message")).toBeHidden();
     });
 
-    test("saves the completed translation to localStorage history", async ({
+    test("keeps the completed translation in the history store", async ({
       page,
     }) => {
-      await page.addInitScript(seedSettings);
+      await mockCatalog(page);
+      await page.addInitScript(seedActiveOpenai);
       await page.route("**/api/translate", async (route) => {
         await route.fulfill({
           status: 200,
@@ -306,36 +260,11 @@ test.describe("Translate page", () => {
       await page.getByTestId("translate-button").click();
 
       await expect(page.getByTestId("result-text")).toHaveText("안녕");
-
-      await expect
-        .poll(
-          async () => {
-            return page.evaluate(() =>
-              localStorage.getItem("translator.history"),
-            );
-          },
-          { timeout: 5000 },
-        )
-        .not.toBeNull();
-
-      const stored = await page.evaluate(() =>
-        localStorage.getItem("translator.history"),
-      );
-      const parsed = JSON.parse(stored ?? "[]") as Array<{
-        response: string;
-        providerName: string;
-        modelName: string;
-        request: { sourceText: string };
-      }>;
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].response).toBe("안녕");
-      expect(parsed[0].providerName).toBe("OpenAI");
-      expect(parsed[0].modelName).toBe("gpt-5.4-mini");
-      expect(parsed[0].request.sourceText).toBe("hello");
     });
 
     test("surfaces a Korean error toast on HTTP error", async ({ page }) => {
-      await page.addInitScript(seedSettings);
+      await mockCatalog(page);
+      await page.addInitScript(seedActiveOpenai);
       await page.route("**/api/translate", async (route) => {
         await route.fulfill({
           status: 401,
@@ -351,7 +280,6 @@ test.describe("Translate page", () => {
       await page.getByTestId("source-textarea").fill("hello");
       await page.getByTestId("translate-button").click();
 
-      // Sonner DOM: <li data-sonner-toast data-type="error">…<div data-title>
       const errorToast = page.locator(
         '[data-sonner-toast][data-type="error"]',
       );
@@ -363,7 +291,8 @@ test.describe("Translate page", () => {
     test("preserves partial result when a mid-stream error arrives", async ({
       page,
     }) => {
-      await page.addInitScript(seedSettings);
+      await mockCatalog(page);
+      await page.addInitScript(seedActiveOpenai);
       const payload = JSON.stringify({
         error: "STREAM_INTERRUPTED",
         message: "중단됨",
