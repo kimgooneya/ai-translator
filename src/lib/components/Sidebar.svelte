@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import HistorySidebarList from "./HistorySidebarList.svelte";
   import SettingsPopover from "./SettingsPopover.svelte";
+  import UserWidget from "./UserWidget.svelte";
 
   let mobileOpen = $state(false);
 
@@ -81,8 +82,9 @@
       <HistorySidebarList />
     </div>
 
-    <!-- Footer: settings popover -->
+    <!-- Footer: user widget + settings popover -->
     <div class="border-t border-border p-2">
+      <UserWidget />
       <SettingsPopover />
     </div>
   </div>

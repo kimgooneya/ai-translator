@@ -147,6 +147,15 @@
   "language_switcher": {
     "label": "言語"
   },
+  "auth": {
+    "sign_in_with_google": "Googleでログイン",
+    "sign_in_with_github": "GitHubでログイン",
+    "sign_out": "ログアウト",
+    "sign_in_to_continue": "続行するにはログインしてください",
+    "signing_in": "ログイン中…",
+    "callback_error": "ログインに失敗しました。もう一度お試しください。",
+    "back_to_login": "ログインに戻る"
+  },
   "common": {
     "close": "閉じる"
   }
