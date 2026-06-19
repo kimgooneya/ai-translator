@@ -15,8 +15,6 @@
     model = $bindable(),
     availableModels,
     hasActiveProvider,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    hasApiKey,
     isLoading,
     canTranslate,
     ontranslate,
@@ -27,7 +25,6 @@
     model: string;
     availableModels: string[];
     hasActiveProvider: boolean;
-    hasApiKey: boolean;
     isLoading: boolean;
     canTranslate: boolean;
     ontranslate: () => void;

@@ -1,8 +1,7 @@
 import { persistedWritable } from "$lib/storage/stores";
 import { settingsSchema } from "$lib/schemas";
-import type { Settings, ProviderConfig } from "$lib/schemas";
+import type { Settings } from "$lib/schemas";
 import { STORAGE_KEYS } from "$lib/storage";
-import { PRESET_PROVIDERS } from "$lib/providers/presets";
 
 const fallback: Settings = {
   providers: [],
@@ -10,16 +9,21 @@ const fallback: Settings = {
   defaultTargetLang: "ko",
 };
 
+/**
+ * Settings migration.
+ *
+ * Managed-key model: provider presets (incl. their model lists) now live in
+ * the DB and are fetched into `providerCatalogStore`. Client settings no
+ * longer carry API keys or custom-provider definitions, so there is nothing
+ * to reconcile against a static `PRESET_PROVIDERS` list here. We pass the
+ * stored settings through unchanged; the schema already strips legacy
+ * `apiKey`/`baseURL`/`params`/custom-definition fields on load.
+ *
+ * Stale-model reset against the live catalog is handled where the catalog is
+ * available (the page), not in this synchronous localStorage migration.
+ */
 export function migrateSettings(s: Settings): Settings {
-  return {
-    ...s,
-    providers: s.providers.map((c) => {
-      const preset = PRESET_PROVIDERS.find((p) => p.id === c.providerId);
-      if (!preset) return c;
-      if (preset.models.includes(c.selectedModel)) return c;
-      return { ...c, selectedModel: preset.defaultModel };
-    }),
-  };
+  return { ...s };
 }
 
 export const settingsStore = persistedWritable(
@@ -29,28 +33,29 @@ export const settingsStore = persistedWritable(
   migrateSettings,
 );
 
-export function upsertProviderConfig(config: ProviderConfig): void {
+/**
+ * Select the active provider. Used by the settings page and the provider
+ * picker on the translate page.
+ */
+export function setActiveProvider(providerId: string): void {
+  settingsStore.update((s) => ({ ...s, activeProviderId: providerId }));
+}
+
+/**
+ * Remember the user's model preference for a given provider. Idempotent:
+ * upserts a `{providerId, selectedModel}` entry into `providers`.
+ */
+export function setSelectedModel(
+  providerId: string,
+  selectedModel: string,
+): void {
   settingsStore.update((s) => {
-    const idx = s.providers.findIndex(
-      (p) => p.providerId === config.providerId,
-    );
+    const idx = s.providers.findIndex((p) => p.providerId === providerId);
+    const config = { providerId, selectedModel };
     const next =
       idx >= 0
         ? s.providers.map((p, i) => (i === idx ? config : p))
         : [...s.providers, config];
     return { ...s, providers: next };
   });
-}
-
-export function removeProviderConfig(providerId: string): void {
-  settingsStore.update((s) => ({
-    ...s,
-    providers: s.providers.filter((p) => p.providerId !== providerId),
-    activeProviderId:
-      s.activeProviderId === providerId ? null : s.activeProviderId,
-  }));
-}
-
-export function setActiveProvider(providerId: string): void {
-  settingsStore.update((s) => ({ ...s, activeProviderId: providerId }));
 }

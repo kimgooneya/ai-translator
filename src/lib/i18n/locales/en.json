@@ -43,7 +43,8 @@
   },
   "settings_page": {
     "title": "Settings",
-    "security_notice": "API keys are stored only in your browser's localStorage. They never leave your device.",
+    "security_notice": "API keys are now managed centrally by the admin. You don't enter a key — the server resolves one securely for each translation.",
+    "loading_providers": "Loading provider list…",
     "api_key_label": "API key",
     "api_key_placeholder": "Enter your API key",
     "api_key_set": "Set",

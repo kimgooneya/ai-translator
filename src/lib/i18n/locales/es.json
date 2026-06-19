@@ -43,7 +43,8 @@
   },
   "settings_page": {
     "title": "Ajustes",
-    "security_notice": "Las claves API se guardan solo en el localStorage de tu navegador. Nunca salen de tu dispositivo.",
+    "security_notice": "Las claves API ahora las gestiona el administrador. No introduzcas ninguna clave: el servidor la resuelve de forma segura en cada traducción.",
+    "loading_providers": "Cargando lista de proveedores…",
     "api_key_label": "Clave API",
     "api_key_placeholder": "Ingresa tu clave API",
     "api_key_set": "Configurada",

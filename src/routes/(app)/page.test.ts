@@ -4,22 +4,26 @@ import { tick } from "svelte";
 import type { Writable } from "svelte/store";
 import Page from "./+page.svelte";
 import { settingsStore } from "$lib/stores/settings";
+import { providerCatalogStore } from "$lib/stores/providers";
 import { glossaryStore } from "$lib/stores/glossary";
 import { historyStore } from "$lib/stores/history";
-import type { Settings, TranslationHistoryEntry } from "$lib/schemas";
-import { extractTextFromFile, UnsupportedFileTypeError } from "$lib/file/extractText";
+import type { Settings, TranslationHistoryEntry, Provider } from "$lib/schemas";
+import {
+  extractTextFromFile,
+  UnsupportedFileTypeError,
+} from "$lib/file/extractText";
 
 const mocks = vi.hoisted(() => {
-	class UnsupportedFileTypeError extends Error {
-		constructor(message: string) {
-			super(message);
-			this.name = "UnsupportedFileTypeError";
-		}
-	}
-	return {
-		extractTextFromFile: vi.fn(),
-		UnsupportedFileTypeError,
-	};
+  class UnsupportedFileTypeError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "UnsupportedFileTypeError";
+    }
+  }
+  return {
+    extractTextFromFile: vi.fn(),
+    UnsupportedFileTypeError,
+  };
 });
 
 vi.mock("$lib/file/extractText", () => mocks);
@@ -35,13 +39,7 @@ function readStore(
   return value;
 }
 
-// bits-ui Select renders a <button> trigger + popover (Portal). Opening the
-// popover requires the full pointer sequence (not just click), because
-// bits-ui listens for onpointerdown on the trigger. Items render with
-// role="option" inside the Portal attached to document.body.
-async function openSelectOptions(
-  trigger: HTMLElement,
-): Promise<HTMLElement[]> {
+async function openSelectOptions(trigger: HTMLElement): Promise<HTMLElement[]> {
   await fireEvent.pointerDown(trigger, { button: 0 });
   await fireEvent.pointerUp(trigger, { button: 0 });
   await fireEvent.click(trigger);
@@ -58,7 +56,6 @@ const configuredSettings: Settings = {
   providers: [
     {
       providerId: "openai",
-      apiKey: "sk-test-key",
       selectedModel: "gpt-5.4-mini",
     },
   ],
@@ -66,10 +63,33 @@ const configuredSettings: Settings = {
   defaultTargetLang: "ko",
 };
 
+// Admin-managed provider catalog (mirrors seed-presets.sql openai row). The
+// page reads provider definitions (models/baseURL) from here, NOT from
+// settings — keys are resolved server-side.
+const catalog: Provider[] = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    kind: "preset",
+    baseURL: "https://api.openai.com/v1",
+    models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+    defaultModel: "gpt-5.4-mini",
+  },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    kind: "preset",
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    models: ["gemini-3.5-flash"],
+    defaultModel: "gemini-3.5-flash",
+  },
+];
+
 describe("Translate page", () => {
   beforeEach(() => {
     localStorage.clear();
     settingsStore.set(emptySettings);
+    providerCatalogStore.set(catalog);
     glossaryStore.set({ enabled: false, entries: [] });
     historyStore.set([]);
     vi.mocked(extractTextFromFile).mockReset();
@@ -104,7 +124,6 @@ describe("Translate page", () => {
     it("renders the source language select with 자동 감지 first", async () => {
       render(Page);
       const trigger = screen.getByTestId("source-lang-select");
-      // shadcn Select.Trigger renders the selected language name as text
       expect(trigger.textContent).toContain("자동 감지");
       const items = await openSelectOptions(trigger);
       expect(items[0].textContent?.trim()).toBe("자동 감지");
@@ -113,7 +132,6 @@ describe("Translate page", () => {
     it("renders the target language select defaulting to ko", () => {
       render(Page);
       const trigger = screen.getByTestId("target-lang-select");
-      // shadcn Select.Trigger shows the language name; "ko" → "한국어"
       expect(trigger.textContent).toContain("한국어");
     });
 
@@ -126,20 +144,20 @@ describe("Translate page", () => {
   });
 
   describe("translate button disabled state", () => {
-    it("is disabled when sourceText is empty and no API key", () => {
+    it("is disabled when sourceText is empty and no active provider", () => {
       render(Page);
       const btn = screen.getByTestId("translate-button") as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
     });
 
-    it("is disabled when sourceText is empty even with API key set", () => {
+    it("is disabled when sourceText is empty even with a provider active", () => {
       settingsStore.set(configuredSettings);
       render(Page);
       const btn = screen.getByTestId("translate-button") as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
     });
 
-    it("is disabled when sourceText present but no API key", async () => {
+    it("is disabled when sourceText present but no active provider", async () => {
       render(Page);
       const textarea = screen.getByTestId("source-textarea");
       await fireEvent.input(textarea, { target: { value: "hello" } });
@@ -147,7 +165,7 @@ describe("Translate page", () => {
       expect(btn.disabled).toBe(true);
     });
 
-    it("is enabled when sourceText present and API key configured", async () => {
+    it("is enabled when sourceText present and provider active (managed key resolved server-side)", async () => {
       settingsStore.set(configuredSettings);
       render(Page);
       const textarea = screen.getByTestId("source-textarea");
@@ -157,40 +175,26 @@ describe("Translate page", () => {
     });
   });
 
-  describe("no API key warning", () => {
+  describe("no active provider warning", () => {
     it("shows warning when no active provider", () => {
       render(Page);
-      expect(screen.getByTestId("no-api-key-warning")).toBeVisible();
-      expect(screen.getByTestId("no-api-key-warning")).toHaveTextContent(
+      expect(screen.getByTestId("no-provider-warning")).toBeVisible();
+      expect(screen.getByTestId("no-provider-warning")).toHaveTextContent(
         "활성 provider",
       );
     });
 
-    it("shows warning when provider has empty API key", () => {
-      settingsStore.set({
-        providers: [
-          { providerId: "openai", apiKey: "", selectedModel: "gpt-5.4-mini" },
-        ],
-        activeProviderId: "openai",
-        defaultTargetLang: "ko",
-      });
-      render(Page);
-      expect(screen.getByTestId("no-api-key-warning")).toBeVisible();
-    });
-
     it("includes a link to settings page", () => {
       render(Page);
-      const link = screen
-        .getByTestId("no-api-key-warning")
-        .querySelector("a");
+      const link = screen.getByTestId("no-provider-warning").querySelector("a");
       expect(link).not.toBeNull();
       expect(link?.getAttribute("href")).toBe("/settings");
     });
 
-    it("hides warning when API key is configured", () => {
+    it("hides warning when a provider is active", () => {
       settingsStore.set(configuredSettings);
       render(Page);
-      expect(screen.queryByTestId("no-api-key-warning")).toBeNull();
+      expect(screen.queryByTestId("no-provider-warning")).toBeNull();
     });
   });
 
@@ -218,8 +222,6 @@ describe("Translate page", () => {
   describe("advanced options", () => {
     it("is collapsed by default (no custom prompt visible)", () => {
       render(Page);
-      // Collapsible.Content stays in the DOM with a `hidden` attribute when
-      // collapsed, so queryByTestId finds it — assert visibility instead.
       expect(screen.queryByTestId("custom-prompt-input")).not.toBeVisible();
       expect(screen.queryByTestId("glossary-toggle")).not.toBeVisible();
     });
@@ -258,8 +260,6 @@ describe("Translate page", () => {
       render(Page);
       await fireEvent.click(screen.getByTestId("advanced-options-toggle"));
       const toggle = screen.getByTestId("glossary-toggle");
-      // shadcn Switch renders a <button role="switch">; checked state is
-      // exposed via aria-checked, not an <input>.checked property.
       expect(toggle).toHaveAttribute("aria-checked", "true");
     });
 
@@ -289,7 +289,7 @@ describe("Translate page", () => {
   });
 
   describe("translate request", () => {
-    it("POSTs to /api/translate with correct body on button click", async () => {
+    it("POSTs a keyless body to /api/translate on button click", async () => {
       const mockFetch = vi.fn().mockResolvedValue(
         new Response("data: hello\n\n", {
           status: 200,
@@ -311,10 +311,11 @@ describe("Translate page", () => {
       const body = JSON.parse(init.body);
       expect(body.sourceText).toBe("hello world");
       expect(body.providerId).toBe("openai");
-      expect(body.apiKey).toBe("sk-test-key");
       expect(body.model).toBe("gpt-5.4-mini");
       expect(body.targetLang).toBe("ko");
       expect(body.sourceLang).toBe("auto");
+      // Managed-key migration: NO apiKey in the request body.
+      expect(body).not.toHaveProperty("apiKey");
 
       vi.unstubAllGlobals();
     });
@@ -325,8 +326,6 @@ describe("Translate page", () => {
 
       settingsStore.set(configuredSettings);
       render(Page);
-      // Button is disabled — clicking a disabled button doesn't fire events,
-      // but force-click to verify the handler guards against empty text.
       const btn = screen.getByTestId("translate-button") as HTMLButtonElement;
       btn.disabled = false;
       await fireEvent.click(btn);
@@ -536,9 +535,7 @@ describe("Translate page", () => {
 
     it("shows a file chip with the filename and keeps textarea empty", async () => {
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["hello from file"], "notes.txt", {
         type: "text/plain",
       });
@@ -552,30 +549,24 @@ describe("Translate page", () => {
       expect(screen.getByTestId("source-textarea")).toHaveValue("");
     });
 
-    it("enables the translate button after loading a file with API key set", async () => {
+    it("enables the translate button after loading a file with a provider active", async () => {
       settingsStore.set(configuredSettings);
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["hello world"], "doc.txt", {
         type: "text/plain",
       });
       await fireEvent.change(input, { target: { files: [file] } });
 
       await waitFor(() => {
-        const btn = screen.getByTestId(
-          "translate-button",
-        ) as HTMLButtonElement;
+        const btn = screen.getByTestId("translate-button") as HTMLButtonElement;
         expect(btn.disabled).toBe(false);
       });
     });
 
     it("shows char count of file content, not textarea", async () => {
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["1234567890"], "doc.txt", {
         type: "text/plain",
       });
@@ -588,9 +579,7 @@ describe("Translate page", () => {
 
     it("does not load unsupported file types", async () => {
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["data"], "doc.docx", {
         type: "application/octet-stream",
       });
@@ -603,9 +592,7 @@ describe("Translate page", () => {
 
     it("removes the file chip when the remove button is clicked", async () => {
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["content"], "notes.txt", {
         type: "text/plain",
       });
@@ -621,9 +608,7 @@ describe("Translate page", () => {
 
     it("clears the file when the user types in the textarea manually", async () => {
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["original content"], "notes.txt", {
         type: "text/plain",
       });
@@ -651,9 +636,7 @@ describe("Translate page", () => {
 
       settingsStore.set(configuredSettings);
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File(["file content to translate"], "doc.txt", {
         type: "text/plain",
       });
@@ -675,9 +658,7 @@ describe("Translate page", () => {
     it("shows a file chip when PDF is uploaded", async () => {
       vi.mocked(extractTextFromFile).mockResolvedValue("pdf extracted text");
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File([new ArrayBuffer(8)], "doc.pdf", {
         type: "application/pdf",
       });
@@ -705,9 +686,7 @@ describe("Translate page", () => {
 
       settingsStore.set(configuredSettings);
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File([new ArrayBuffer(8)], "doc.pdf", {
         type: "application/pdf",
       });
@@ -729,9 +708,7 @@ describe("Translate page", () => {
     it("does not load PDF with no extractable text", async () => {
       vi.mocked(extractTextFromFile).mockResolvedValue("");
       render(Page);
-      const input = screen.getByTestId(
-        "file-upload-input",
-      ) as HTMLInputElement;
+      const input = screen.getByTestId("file-upload-input") as HTMLInputElement;
       const file = new File([new ArrayBuffer(8)], "scanned.pdf", {
         type: "application/pdf",
       });

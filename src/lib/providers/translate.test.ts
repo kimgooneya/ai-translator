@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type {
-  TranslationRequest,
-  Settings,
-  ProviderConfig,
-} from "$lib/schemas";
+import type { TranslationRequest, ResolvedProvider } from "$lib/schemas";
 
-const { mockCreate, MockOpenAI } = vi.hoisted(() => {
+const { mockCreate, constructorCalls, MockOpenAI } = vi.hoisted(() => {
   const mockCreate = vi.fn();
+  const constructorCalls: Array<{
+    apiKey: string | null;
+    baseURL: string | null;
+  }> = [];
   class MockOpenAI {
     apiKey: string | null;
     baseURL: string | null;
@@ -17,6 +17,10 @@ const { mockCreate, MockOpenAI } = vi.hoisted(() => {
     }) {
       this.apiKey = opts?.apiKey ?? null;
       this.baseURL = opts?.baseURL ?? null;
+      constructorCalls.push({
+        apiKey: this.apiKey,
+        baseURL: this.baseURL,
+      });
     }
     chat = {
       completions: {
@@ -24,7 +28,7 @@ const { mockCreate, MockOpenAI } = vi.hoisted(() => {
       },
     };
   }
-  return { mockCreate, MockOpenAI };
+  return { mockCreate, constructorCalls, MockOpenAI };
 });
 
 vi.mock("openai", () => ({
@@ -38,20 +42,18 @@ const baseRequest: TranslationRequest = {
   sourceLang: "auto",
   targetLang: "ko",
   providerId: "openai",
-  apiKey: "sk-test-123",
   model: "gpt-5.4-mini",
 };
 
-const baseSettings: Settings = {
-  providers: [
-    {
-      providerId: "openai",
-      apiKey: "",
-      selectedModel: "gpt-5.4-mini",
-    },
-  ],
-  activeProviderId: "openai",
-  defaultTargetLang: "ko",
+// Fully-resolved provider (server-built). apiKey is the decrypted managed key;
+// baseURL comes from the DB preset. streamTranslation consumes this directly.
+const baseProvider: ResolvedProvider = {
+  id: "openai",
+  name: "OpenAI",
+  baseURL: "https://api.openai.com/v1",
+  models: ["gpt-5.4-mini"],
+  defaultModel: "gpt-5.4-mini",
+  apiKey: "sk-test-123",
 };
 
 function makeAsyncIterable(
@@ -200,18 +202,12 @@ describe("buildTranslationMessages", () => {
 describe("streamTranslation", () => {
   beforeEach(() => {
     mockCreate.mockReset();
-  });
-
-  it("throws if provider is not present in settings", async () => {
-    const settings: Settings = { ...baseSettings, providers: [] };
-    await expect(
-      streamTranslation({ ...baseRequest, providerId: "openai" }, settings),
-    ).rejects.toThrow(/not found in settings/i);
+    constructorCalls.length = 0;
   });
 
   it("calls chat.completions.create with the request model and messages", async () => {
     mockCreate.mockResolvedValueOnce(makeAsyncIterable([]));
-    await streamTranslation(baseRequest, baseSettings);
+    await streamTranslation(baseRequest, baseProvider);
     expect(mockCreate).toHaveBeenCalledTimes(1);
     const callArg = mockCreate.mock.calls[0][0];
     expect(callArg.model).toBe("gpt-5.4-mini");
@@ -219,30 +215,11 @@ describe("streamTranslation", () => {
     expect(callArg.messages).toHaveLength(2);
   });
 
-  it("uses default temperature 0.3 when providerConfig has no params", async () => {
+  it("uses the fixed 0.3 temperature (managed presets — no per-provider override)", async () => {
     mockCreate.mockResolvedValueOnce(makeAsyncIterable([]));
-    await streamTranslation(baseRequest, baseSettings);
+    await streamTranslation(baseRequest, baseProvider);
     const callArg = mockCreate.mock.calls[0][0];
     expect(callArg.temperature).toBe(0.3);
-  });
-
-  it("uses configured temperature when params present", async () => {
-    const settings: Settings = {
-      providers: [
-        {
-          providerId: "openai",
-          apiKey: "",
-          selectedModel: "gpt-5.4-mini",
-          params: { temperature: 0.7 },
-        },
-      ],
-      activeProviderId: "openai",
-      defaultTargetLang: "ko",
-    };
-    mockCreate.mockResolvedValueOnce(makeAsyncIterable([]));
-    await streamTranslation(baseRequest, settings);
-    const callArg = mockCreate.mock.calls[0][0];
-    expect(callArg.temperature).toBe(0.7);
   });
 
   it("streams chunks as SSE-encoded lines and ends with data: [DONE]", async () => {
@@ -252,7 +229,7 @@ describe("streamTranslation", () => {
         { choices: [{ delta: { content: "하세요" } }] },
       ]),
     );
-    const stream = await streamTranslation(baseRequest, baseSettings);
+    const stream = await streamTranslation(baseRequest, baseProvider);
     const out = await collectStream(stream);
     expect(out).toContain("data: 안녕\n\n");
     expect(out).toContain("data: 하세요\n\n");
@@ -265,18 +242,18 @@ describe("streamTranslation", () => {
         { choices: [{ delta: { content: "line1\nline2" } }] },
       ]),
     );
-    const stream = await streamTranslation(baseRequest, baseSettings);
+    const stream = await streamTranslation(baseRequest, baseProvider);
     const out = await collectStream(stream);
     expect(out).toContain("data: line1\n\n");
     expect(out).toContain("data: line2\n\n");
   });
 
-  it("uses request.apiKey (not settings.apiKey) to construct the client", async () => {
+  it("builds the OpenAI client with the resolved provider's apiKey + baseURL", async () => {
     mockCreate.mockResolvedValueOnce(makeAsyncIterable([]));
-    await streamTranslation(baseRequest, baseSettings);
-    // MockOpenAI constructor stored apiKey; we verify it via the chat.create call success
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-    // settings had empty apiKey, but request had 'sk-test-123' — no throw means client built
+    await streamTranslation(baseRequest, baseProvider);
+    expect(constructorCalls).toHaveLength(1);
+    expect(constructorCalls[0].apiKey).toBe("sk-test-123");
+    expect(constructorCalls[0].baseURL).toBe("https://api.openai.com/v1");
   });
 
   it("propagates errors from the underlying stream via controller.error", async () => {
@@ -286,35 +263,12 @@ describe("streamTranslation", () => {
         throw new Error("upstream failure");
       })(),
     );
-    const stream = await streamTranslation(baseRequest, baseSettings);
+    const stream = await streamTranslation(baseRequest, baseProvider);
     const reader = stream.getReader();
     const first = await reader.read();
     expect(first.done).toBe(false);
     expect(first.value).toBeDefined();
     expect(first.value?.byteLength).toBeGreaterThan(0);
     await expect(reader.read()).rejects.toThrow(/upstream failure/);
-  });
-
-  it("supports custom providers with baseURL", async () => {
-    const customConfig: ProviderConfig = {
-      providerId: "my-custom",
-      apiKey: "sk-custom",
-      selectedModel: "my-model-1",
-      baseURL: "https://api.example.com/v1",
-    };
-    const settings: Settings = {
-      providers: [customConfig],
-      activeProviderId: "my-custom",
-      defaultTargetLang: "ko",
-    };
-    const request: TranslationRequest = {
-      ...baseRequest,
-      providerId: "my-custom",
-      model: "my-model-1",
-    };
-    mockCreate.mockResolvedValueOnce(makeAsyncIterable([]));
-    await streamTranslation(request, settings);
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-    expect(mockCreate.mock.calls[0][0].model).toBe("my-model-1");
   });
 });

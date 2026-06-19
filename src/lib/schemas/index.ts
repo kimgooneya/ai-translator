@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/**
+ * Provider catalog entry (admin-managed preset). Sourced from the
+ * `provider_presets` table and surfaced to the client via
+ * `GET /api/user/providers`. Carries NO key material — keys live in the
+ * separate `provider_keys` table and are never exposed to the browser.
+ */
 export const providerSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -9,24 +15,15 @@ export const providerSchema = z.object({
   defaultModel: z.string(),
 });
 
+/**
+ * Per-user provider selection stored in localStorage. Managed-key model:
+ * the client only remembers which provider is selected and which model the
+ * user last picked for it. The API key is NO LONGER stored client-side —
+ * the server resolves an encrypted key from `provider_keys` per request.
+ */
 export const providerConfigSchema = z.object({
   providerId: z.string().min(1),
-  apiKey: z.string(),
   selectedModel: z.string().min(1),
-  // Optional for preset providers (baseURL looked up from registry);
-  // required for custom providers at validation time.
-  baseURL: z.url().optional(),
-  // Custom-provider definition (presets ignore these). Optional for backward
-  // compat: getAllProviders falls back to providerId/selectedModel when absent.
-  name: z.string().min(1).optional(),
-  models: z.array(z.string().min(1)).min(1).optional(),
-  defaultModel: z.string().optional(),
-  params: z
-    .object({
-      temperature: z.number().min(0).max(2).optional(),
-      maxTokens: z.number().int().positive().optional(),
-    })
-    .optional(),
 });
 
 export const settingsSchema = z.object({
@@ -48,12 +45,18 @@ export const glossarySchema = z.object({
   entries: z.array(glossaryEntrySchema).default([]),
 });
 
+/**
+ * Translation request body for `POST /api/translate`.
+ *
+ * NOTE (managed-key migration): `apiKey` was REMOVED. The server now resolves
+ * an encrypted key from `provider_keys` based on the authenticated session
+ * + `providerId`. The client must NOT send a key.
+ */
 export const translationRequestSchema = z.object({
   sourceText: z.string().min(1),
   sourceLang: z.union([z.literal("auto"), z.string().min(2)]),
   targetLang: z.string().min(2),
   providerId: z.string().min(1),
-  apiKey: z.string().min(1),
   model: z.string().min(1),
   glossary: glossarySchema.optional(),
   customPrompt: z.string().optional(),
@@ -82,3 +85,24 @@ export type TranslationHistoryEntry = z.infer<
   typeof translationHistoryEntrySchema
 >;
 export type DismissedNotices = z.infer<typeof dismissedNoticesSchema>;
+
+/**
+ * Fully-resolved provider ready to stream, built server-side only.
+ *
+ * Combines the catalog preset (`baseURL`/`models`/`defaultModel`/`name`) with
+ * the DECRYPTED API key resolved from `provider_keys`. This type is NEVER
+ * persisted and NEVER reaches the client bundle — it lives only in
+ * `/api/translate` handler memory for the duration of one request.
+ *
+ * `streamTranslation` consumes this directly instead of synthesizing a
+ * `Settings` object, since the server is now the sole caller and has all
+ * the resolved data in hand.
+ */
+export type ResolvedProvider = {
+  id: string;
+  name: string;
+  baseURL: string;
+  models: string[];
+  defaultModel: string;
+  apiKey: string;
+};
