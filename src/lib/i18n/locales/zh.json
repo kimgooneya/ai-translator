@@ -147,6 +147,15 @@
   "language_switcher": {
     "label": "语言"
   },
+  "auth": {
+    "sign_in_with_google": "使用 Google 登录",
+    "sign_in_with_github": "使用 GitHub 登录",
+    "sign_out": "退出登录",
+    "sign_in_to_continue": "请登录以继续",
+    "signing_in": "登录中…",
+    "callback_error": "登录失败，请重试。",
+    "back_to_login": "返回登录"
+  },
   "common": {
     "close": "关闭"
   }

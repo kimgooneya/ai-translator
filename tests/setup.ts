@@ -1,14 +1,41 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/svelte";
 import { initI18n } from "$lib/i18n";
+import {
+  mockSupabaseBrowser,
+  mockUserStore,
+  mockSessionStore,
+  mockProfileStore,
+  resetMockSupabase,
+} from "./supabase-mock";
 
 // Tests assert against the default Korean locale; override per-test via `locale.set`.
 initI18n();
 
-// Cleanup after each test to avoid memory leaks
-afterEach(() => {
+// ─── Global Supabase + auth mock ─────────────────────────────────────────
+// Vitest requires variables referenced inside `vi.mock` factories to be
+// hoisted (via `vi.hoisted`) or named with a `mock` prefix; the singletons
+// imported above satisfy the latter rule, so don't rename them. Per-file
+// `vi.mock` calls override these for that file only (see `auth.test.ts`).
+vi.mock("$lib/supabase/client", () => ({
+  supabaseBrowser: mockSupabaseBrowser,
+}));
+
+vi.mock("$lib/stores/auth", () => ({
+  userStore: mockUserStore,
+  sessionStore: mockSessionStore,
+  profileStore: mockProfileStore,
+  signOut: vi.fn(async () => {}),
+}));
+
+// Drain pending microtasks (non-awaited store mutations like the optimistic
+// update inside `addHistoryEntry`) before resetting mock state, so leftover
+// work from one test can't race into the next test's assertions.
+afterEach(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
   cleanup();
+  resetMockSupabase();
 });
 
 // localStorage polyfill — jsdom provides it but ensure it's reset between tests

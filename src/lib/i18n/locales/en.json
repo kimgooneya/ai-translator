@@ -147,6 +147,15 @@
   "language_switcher": {
     "label": "Language"
   },
+  "auth": {
+    "sign_in_with_google": "Sign in with Google",
+    "sign_in_with_github": "Sign in with GitHub",
+    "sign_out": "Sign out",
+    "sign_in_to_continue": "Sign in to continue",
+    "signing_in": "Signing in…",
+    "callback_error": "Sign-in failed. Please try again.",
+    "back_to_login": "Back to login"
+  },
   "common": {
     "close": "Close"
   }

@@ -9,6 +9,8 @@ import {
   removeHistoryEntry,
   clearHistory,
 } from "$lib/stores/history";
+import type { TranslationHistoryRow } from "$lib/supabase/database.types";
+import { getMockTable } from "../../../../tests/supabase-mock";
 import Page from "./+page.svelte";
 
 function entry(
@@ -53,8 +55,7 @@ function getCardByEntryId(id: string): HTMLElement {
 }
 
 beforeEach(() => {
-  historyStore.reset();
-  localStorage.clear();
+  historyStore.set([]);
 });
 
 afterEach(() => {
@@ -335,15 +336,17 @@ describe("History page", () => {
     });
 
     it("removes only the targeted entry, leaving others untouched", async () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      addHistoryEntry(entry({ id: "h-2" }));
+      addHistoryEntry(entry({ id: "h-1", response: "first" }));
+      addHistoryEntry(entry({ id: "h-2", response: "second" }));
       render(Page);
 
       const card = getCardByEntryId("h-1");
       await fireEvent.click(within(card).getByTestId("history-delete-button"));
 
       expect(screen.queryAllByTestId("history-entry-card")).toHaveLength(1);
-      expect(get(historyStore).map((e) => e.id)).toEqual(["h-2"]);
+      // After the click + reconcile, ids become DB-generated uuids; assert on
+      // a stable field (response) instead of the original temp id.
+      expect(get(historyStore).map((e) => e.response)).toEqual(["second"]);
     });
 
     it("does not show a confirm dialog for single-entry delete (immediate)", async () => {
@@ -401,15 +404,15 @@ describe("History page", () => {
       expect(screen.getByTestId("history-empty-message")).toBeInTheDocument();
     });
 
-    it("persists empty array to localStorage after clearing", async () => {
+    it("removes all rows from the translation_history table after clearing", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       addHistoryEntry(entry({ id: "h-1" }));
       render(Page);
 
       await fireEvent.click(screen.getByTestId("history-clear-all-button"));
 
-      const raw = localStorage.getItem("translator.history");
-      expect(JSON.parse(raw ?? "[]")).toEqual([]);
+      const rows = getMockTable<TranslationHistoryRow>("translation_history");
+      expect(rows).toEqual([]);
     });
   });
 

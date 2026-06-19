@@ -8,6 +8,8 @@ import {
   HISTORY_LIMIT,
 } from "$lib/stores/history";
 import type { TranslationHistoryEntry } from "$lib/schemas";
+import type { TranslationHistoryRow } from "$lib/supabase/database.types";
+import { getMockTable, resetMockSupabase } from "../../../tests/supabase-mock";
 
 function entry(
   overrides: Partial<TranslationHistoryEntry> = {},
@@ -30,9 +32,12 @@ function entry(
   };
 }
 
+// The mock tables are reset between tests by setup.ts afterEach; the store
+// also needs an explicit reset because it doesn't auto-refetch when the user
+// (and therefore the userStore value) is unchanged across tests.
 beforeEach(() => {
-  historyStore.reset();
-  localStorage.clear();
+  resetMockSupabase();
+  historyStore.set([]);
 });
 
 describe("historyStore", () => {
@@ -49,33 +54,39 @@ describe("historyStore", () => {
   });
 
   describe("addHistoryEntry", () => {
-    it("prepends a new entry (newest first)", () => {
-      addHistoryEntry(
+    it("prepends a new entry (newest first)", async () => {
+      await addHistoryEntry(
         entry({ id: "h-1", createdAt: "2025-01-01T00:00:00.000Z" }),
       );
-      addHistoryEntry(
+      await addHistoryEntry(
         entry({ id: "h-2", createdAt: "2025-01-02T00:00:00.000Z" }),
       );
       const value = get(historyStore);
-      expect(value.map((e) => e.id)).toEqual(["h-2", "h-1"]);
+      expect(value.map((e) => e.createdAt)).toEqual([
+        "2025-01-02T00:00:00.000Z",
+        "2025-01-01T00:00:00.000Z",
+      ]);
     });
 
-    it("persists the new entry to localStorage under translator.history", () => {
-      addHistoryEntry(entry({ id: "persist-1" }));
-      const raw = localStorage.getItem("translator.history");
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw ?? "[]");
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].id).toBe("persist-1");
+    it("persists the new entry to the translation_history table", async () => {
+      await addHistoryEntry(entry({ id: "persist-1", response: "안녕" }));
+      const rows = getMockTable<TranslationHistoryRow>("translation_history");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        response: "안녕",
+        provider_name: "OpenAI",
+        model_name: "gpt-5.4-mini",
+        user_id: "test-user-id",
+      });
     });
 
-    it("accepts an entry with optional tokensUsed", () => {
-      addHistoryEntry(entry({ tokensUsed: 42 }));
+    it("accepts an entry with optional tokensUsed", async () => {
+      await addHistoryEntry(entry({ tokensUsed: 42 }));
       expect(get(historyStore)[0].tokensUsed).toBe(42);
     });
 
-    it("accepts an entry with glossary and customPrompt", () => {
-      addHistoryEntry(
+    it("accepts an entry with glossary and customPrompt", async () => {
+      await addHistoryEntry(
         entry({
           id: "h-rich",
           request: {
@@ -100,9 +111,9 @@ describe("historyStore", () => {
   });
 
   describe("100-entry limit (CRITICAL)", () => {
-    it("keeps length at 100 after adding 101 entries", () => {
+    it("keeps length at 100 after adding 101 entries", async () => {
       for (let i = 0; i < 101; i++) {
-        addHistoryEntry(
+        await addHistoryEntry(
           entry({
             id: `h-${i}`,
             createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
@@ -112,111 +123,170 @@ describe("historyStore", () => {
       expect(get(historyStore)).toHaveLength(100);
     });
 
-    it("drops the oldest entry (the first added) when 101 are inserted", () => {
+    it("drops the oldest entry (the first added) when 101 are inserted", async () => {
       for (let i = 0; i < 101; i++) {
-        addHistoryEntry(
+        await addHistoryEntry(
           entry({
             id: `h-${i}`,
             createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
           }),
         );
       }
-      const ids = get(historyStore).map((e) => e.id);
+      const timestamps = get(historyStore).map((e) => e.createdAt);
+      const oldest = new Date(2025, 0, 1, 0, 0, 0).toISOString();
+      const newest = new Date(2025, 0, 1, 0, 0, 100).toISOString();
+      const second = new Date(2025, 0, 1, 0, 0, 1).toISOString();
       // h-0 was added first (oldest). It should be gone.
-      expect(ids).not.toContain("h-0");
+      expect(timestamps).not.toContain(oldest);
       // The newest (h-100) and h-1 should remain.
-      expect(ids).toContain("h-100");
-      expect(ids).toContain("h-1");
+      expect(timestamps).toContain(newest);
+      expect(timestamps).toContain(second);
     });
 
-    it("keeps exactly HISTORY_LIMIT (100) entries, not more", () => {
+    it("keeps exactly HISTORY_LIMIT (100) entries, not more", async () => {
       for (let i = 0; i < 150; i++) {
-        addHistoryEntry(entry({ id: `h-${i}` }));
+        await addHistoryEntry(
+          entry({
+            id: `h-${i}`,
+            createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+          }),
+        );
       }
       expect(get(historyStore).length).toBe(HISTORY_LIMIT);
     });
 
-    it("keeps the 100 newest entries when overflow occurs", () => {
+    it("keeps the 100 newest entries when overflow occurs", async () => {
       for (let i = 0; i < 150; i++) {
-        addHistoryEntry(entry({ id: `h-${i}` }));
+        await addHistoryEntry(
+          entry({
+            id: `h-${i}`,
+            createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+          }),
+        );
       }
-      const ids = get(historyStore).map((e) => e.id);
-      // Newest 100 = h-149 .. h-50 (prepended order: newest first)
-      expect(ids[0]).toBe("h-149");
-      expect(ids[99]).toBe("h-50");
-      expect(ids).not.toContain("h-49");
+      const timestamps = get(historyStore).map((e) => e.createdAt);
+      // Newest 100 = h-149 .. h-50 (prepended order: newest first).
+      expect(timestamps[0]).toBe(new Date(2025, 0, 1, 0, 0, 149).toISOString());
+      expect(timestamps[99]).toBe(new Date(2025, 0, 1, 0, 0, 50).toISOString());
+      expect(timestamps).not.toContain(
+        new Date(2025, 0, 1, 0, 0, 49).toISOString(),
+      );
     });
 
-    it("does not trim when exactly 100 entries are added", () => {
+    it("does not trim when exactly 100 entries are added", async () => {
       for (let i = 0; i < 100; i++) {
-        addHistoryEntry(entry({ id: `h-${i}` }));
+        await addHistoryEntry(
+          entry({
+            id: `h-${i}`,
+            createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+          }),
+        );
       }
       expect(get(historyStore)).toHaveLength(100);
     });
 
-    it("trims one entry when going from 100 to 101", () => {
+    it("trims one entry when going from 100 to 101", async () => {
       for (let i = 0; i < 100; i++) {
-        addHistoryEntry(entry({ id: `h-${i}` }));
+        await addHistoryEntry(
+          entry({
+            id: `h-${i}`,
+            createdAt: new Date(2025, 0, 1, 0, 0, i).toISOString(),
+          }),
+        );
       }
       expect(get(historyStore)).toHaveLength(100);
-      addHistoryEntry(entry({ id: "h-100" }));
+      await addHistoryEntry(
+        entry({
+          id: "h-100",
+          createdAt: new Date(2025, 0, 1, 0, 0, 100).toISOString(),
+        }),
+      );
       expect(get(historyStore)).toHaveLength(100);
-      expect(get(historyStore).map((e) => e.id)).not.toContain("h-0");
+      const timestamps = get(historyStore).map((e) => e.createdAt);
+      expect(timestamps).not.toContain(
+        new Date(2025, 0, 1, 0, 0, 0).toISOString(),
+      );
     });
   });
 
   describe("removeHistoryEntry", () => {
-    it("removes the entry with the given id", () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      removeHistoryEntry("h-1");
+    it("removes the entry with the given id", async () => {
+      const e = entry({ id: "h-1", response: "안녕" });
+      await addHistoryEntry(e);
+      const persistedId = get(historyStore)[0].id;
+      await removeHistoryEntry(persistedId);
       expect(get(historyStore)).toHaveLength(0);
     });
 
-    it("leaves other entries untouched", () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      addHistoryEntry(entry({ id: "h-2" }));
-      removeHistoryEntry("h-1");
+    it("leaves other entries untouched", async () => {
+      await addHistoryEntry(
+        entry({
+          id: "h-1",
+          response: "a",
+          createdAt: "2025-01-01T00:00:00.000Z",
+        }),
+      );
+      await addHistoryEntry(
+        entry({
+          id: "h-2",
+          response: "b",
+          createdAt: "2025-01-02T00:00:00.000Z",
+        }),
+      );
+      const entries = get(historyStore);
+      const oldestId = entries.find((e) => e.response === "a")!.id;
+      await removeHistoryEntry(oldestId);
       const value = get(historyStore);
       expect(value).toHaveLength(1);
-      expect(value[0].id).toBe("h-2");
+      expect(value[0].response).toBe("b");
     });
 
-    it("is a no-op when the id does not exist", () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      removeHistoryEntry("h-missing");
+    it("is a no-op when the id does not exist", async () => {
+      await addHistoryEntry(entry({ id: "h-1" }));
+      await removeHistoryEntry("h-missing");
       expect(get(historyStore)).toHaveLength(1);
     });
   });
 
   describe("clearHistory", () => {
-    it("empties the store", () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      addHistoryEntry(entry({ id: "h-2" }));
-      clearHistory();
+    it("empties the store", async () => {
+      await addHistoryEntry(entry({ id: "h-1" }));
+      await addHistoryEntry(entry({ id: "h-2" }));
+      await clearHistory();
       expect(get(historyStore)).toEqual([]);
     });
 
-    it("persists an empty array to localStorage", () => {
-      addHistoryEntry(entry({ id: "h-1" }));
-      clearHistory();
-      const raw = localStorage.getItem("translator.history");
-      expect(JSON.parse(raw ?? "[]")).toEqual([]);
+    it("removes all rows from the translation_history table", async () => {
+      await addHistoryEntry(entry({ id: "h-1" }));
+      await clearHistory();
+      const rows = getMockTable<TranslationHistoryRow>("translation_history");
+      expect(rows).toEqual([]);
     });
 
-    it("is safe to call on an empty store", () => {
-      clearHistory();
+    it("is safe to call on an empty store", async () => {
+      await clearHistory();
       expect(get(historyStore)).toEqual([]);
     });
   });
 
   describe("schema compliance", () => {
-    it("survives a load/parse round-trip after mutations", () => {
-      addHistoryEntry(entry({ id: "h-1", response: "안녕" }));
-      const raw = localStorage.getItem("translator.history");
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw ?? "[]");
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0]).toMatchObject({ id: "h-1", response: "안녕" });
+    it("round-trips request/response/provider/model through the table", async () => {
+      await addHistoryEntry(
+        entry({ id: "h-1", response: "안녕", tokensUsed: 7 }),
+      );
+      const rows = getMockTable<TranslationHistoryRow>("translation_history");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        response: "안녕",
+        provider_name: "OpenAI",
+        model_name: "gpt-5.4-mini",
+        tokens_used: 7,
+      });
+      // Request jsonb round-trips with nested fields intact.
+      expect(rows[0].request).toMatchObject({
+        sourceText: "hello",
+        targetLang: "ko",
+      });
     });
   });
 });

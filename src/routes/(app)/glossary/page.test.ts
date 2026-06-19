@@ -9,6 +9,8 @@ import {
   updateEntry,
   removeEntry,
 } from "$lib/stores/glossary";
+import type { GlossaryEntryRow } from "$lib/supabase/database.types";
+import { getMockTable } from "../../../../tests/supabase-mock";
 import Page from "./+page.svelte";
 
 function entry(overrides: Partial<GlossaryEntry> = {}): GlossaryEntry {
@@ -28,8 +30,7 @@ function getEditForm(): HTMLElement {
 }
 
 beforeEach(() => {
-  glossaryStore.reset();
-  localStorage.clear();
+  glossaryStore.set({ enabled: false, entries: [] });
 });
 
 afterEach(() => {
@@ -61,7 +62,7 @@ describe("Glossary page", () => {
     });
 
     it("does not render the empty message once an entry exists", async () => {
-      addEntry(entry());
+      await addEntry(entry());
       render(Page);
       expect(screen.queryByTestId("glossary-empty-message")).toBeNull();
     });
@@ -73,8 +74,8 @@ describe("Glossary page", () => {
       expect(screen.getByText("총 0개 용어")).toBeInTheDocument();
     });
 
-    it('shows "총 1개 용어" after one entry is added', () => {
-      addEntry(entry());
+    it('shows "총 1개 용어" after one entry is added', async () => {
+      await addEntry(entry());
       render(Page);
       expect(screen.getByText("총 1개 용어")).toBeInTheDocument();
     });
@@ -169,7 +170,9 @@ describe("Glossary page", () => {
 
   describe("edit flow", () => {
     it("renders an edit form in place of the row when edit is clicked", async () => {
-      addEntry(entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }));
+      await addEntry(
+        entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }),
+      );
       render(Page);
 
       await fireEvent.click(screen.getByTestId("edit-button"));
@@ -182,7 +185,9 @@ describe("Glossary page", () => {
     });
 
     it("prefills the edit form with the existing entry values", async () => {
-      addEntry(entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }));
+      await addEntry(
+        entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }),
+      );
       render(Page);
 
       await fireEvent.click(screen.getByTestId("edit-button"));
@@ -205,7 +210,9 @@ describe("Glossary page", () => {
     });
 
     it("updates the entry when the edit form is submitted", async () => {
-      addEntry(entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }));
+      await addEntry(
+        entry({ id: "g-1", source: "RAG", target: "검색 증강 생성" }),
+      );
       render(Page);
 
       await fireEvent.click(screen.getByTestId("edit-button"));
@@ -225,7 +232,7 @@ describe("Glossary page", () => {
     });
 
     it("returns to view mode (no edit form) when cancel is clicked", async () => {
-      addEntry(entry({ id: "g-1" }));
+      await addEntry(entry({ id: "g-1" }));
       render(Page);
 
       await fireEvent.click(screen.getByTestId("edit-button"));
@@ -245,7 +252,7 @@ describe("Glossary page", () => {
   describe("delete flow", () => {
     it("does NOT delete when confirm() returns false", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(false);
-      addEntry(entry({ id: "g-1" }));
+      await addEntry(entry({ id: "g-1" }));
       render(Page);
 
       expect(screen.getAllByTestId("glossary-entry-row")).toHaveLength(1);
@@ -256,7 +263,7 @@ describe("Glossary page", () => {
 
     it("removes the entry when confirm() returns true", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
-      addEntry(entry({ id: "g-1" }));
+      await addEntry(entry({ id: "g-1" }));
       render(Page);
 
       await fireEvent.click(screen.getByTestId("delete-button"));
@@ -267,7 +274,7 @@ describe("Glossary page", () => {
 
     it("passes the Korean confirm message to window.confirm", async () => {
       const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-      addEntry(entry({ id: "g-1" }));
+      await addEntry(entry({ id: "g-1" }));
       render(Page);
 
       await fireEvent.click(screen.getByTestId("delete-button"));
@@ -305,7 +312,7 @@ describe("Glossary page", () => {
   });
 
   describe("store integration", () => {
-    it("persists an added entry to localStorage under translator.glossary", async () => {
+    it("persists an added entry to the glossary_entries table", async () => {
       render(Page);
       await fireEvent.input(screen.getByTestId("glossary-source-input"), {
         target: { value: "Token" },
@@ -315,18 +322,16 @@ describe("Glossary page", () => {
       });
       await fireEvent.click(screen.getByTestId("glossary-submit-button"));
 
-      const raw = localStorage.getItem("translator.glossary");
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw ?? "{}");
-      expect(parsed.entries).toHaveLength(1);
-      expect(parsed.entries[0]).toMatchObject({
+      const rows = getMockTable<GlossaryEntryRow>("glossary_entries");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
         source: "Token",
         target: "토큰",
       });
     });
 
-    it("reflects entries added directly to the store via addEntry", () => {
-      addEntry(
+    it("reflects entries added directly to the store via addEntry", async () => {
+      await addEntry(
         entry({ id: "direct-1", source: "GPU", target: "그래픽 처리 장치" }),
       );
       render(Page);
@@ -335,11 +340,12 @@ describe("Glossary page", () => {
     });
 
     it("reflects removeEntry applied directly to the store", async () => {
-      addEntry(entry({ id: "g-1" }));
+      await addEntry(entry({ id: "g-1" }));
+      const persistedId = get(glossaryStore).entries[0].id;
       render(Page);
       expect(screen.getAllByTestId("glossary-entry-row")).toHaveLength(1);
 
-      removeEntry("g-1");
+      await removeEntry(persistedId);
       await tick();
 
       expect(screen.queryAllByTestId("glossary-entry-row")).toHaveLength(0);
@@ -347,9 +353,10 @@ describe("Glossary page", () => {
     });
 
     it("reflects updateEntry applied directly to the store", async () => {
-      addEntry(entry({ id: "g-1", source: "old" }));
+      await addEntry(entry({ id: "g-1", source: "old" }));
+      const persistedId = get(glossaryStore).entries[0].id;
       render(Page);
-      updateEntry("g-1", { source: "new" });
+      await updateEntry(persistedId, { source: "new" });
       await tick();
       expect(screen.getByTestId("entry-source")).toHaveTextContent("new");
     });

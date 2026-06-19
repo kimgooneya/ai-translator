@@ -147,6 +147,15 @@
   "language_switcher": {
     "label": "Idioma"
   },
+  "auth": {
+    "sign_in_with_google": "Entrar com Google",
+    "sign_in_with_github": "Entrar com GitHub",
+    "sign_out": "Sair",
+    "sign_in_to_continue": "Entre para continuar",
+    "signing_in": "Entrando…",
+    "callback_error": "Falha ao entrar. Tente novamente.",
+    "back_to_login": "Voltar para o login"
+  },
   "common": {
     "close": "Fechar"
   }
