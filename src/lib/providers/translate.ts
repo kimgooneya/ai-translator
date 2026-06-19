@@ -1,6 +1,13 @@
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import type { TranslationRequest, Settings } from "$lib/schemas";
-import { createProviderClient, getProviderById } from "./registry";
+import type { TranslationRequest, ResolvedProvider } from "$lib/schemas";
+import { createProviderClient } from "./registry";
+
+/**
+ * Default sampling temperature for managed-key translations. The old
+ * per-provider `params.temperature` override was a custom-provider feature
+ * (removed — Q3); managed presets all use this fixed value.
+ */
+const DEFAULT_TEMPERATURE = 0.3;
 
 export function buildTranslationMessages(
   request: TranslationRequest,
@@ -45,33 +52,34 @@ Sound natural — translate the way a native speaker would actually say it out l
   ];
 }
 
+/**
+ * Stream a translation from the resolved provider into an SSE-encoded
+ * `ReadableStream<Uint8Array>`.
+ *
+ * Managed-key model: the caller (the `/api/translate` server handler) passes
+ * a {@link ResolvedProvider} that already carries the DECRYPTED key + DB
+ * `baseURL`. This function no longer reads `request.apiKey` (removed from the
+ * schema) nor synthesizes a `Settings` object — the server has everything
+ * resolved in hand.
+ *
+ * Wire format (unchanged — clients depend on it):
+ *   - Text chunk: `data: <line>\n\n`
+ *   - Stream end: `data: [DONE]\n\n`
+ *   - Errors surface via `controller.error` and are translated into a terminal
+ *     SSE error event by the caller's `wrapStreamWithErrorHandling`.
+ */
 export async function streamTranslation(
   request: TranslationRequest,
-  settings: Settings,
+  provider: ResolvedProvider,
 ): Promise<ReadableStream<Uint8Array>> {
-  const providerConfig = settings.providers.find(
-    (p) => p.providerId === request.providerId,
-  );
-  if (!providerConfig) {
-    throw new Error(`Provider ${request.providerId} not found in settings`);
-  }
-
-  const provider = getProviderById(settings, request.providerId);
-  if (!provider) {
-    throw new Error(`Provider ${request.providerId} not registered`);
-  }
-
-  const client = createProviderClient(
-    { ...providerConfig, apiKey: request.apiKey },
-    provider.baseURL,
-  );
+  const client = createProviderClient(provider.apiKey, provider.baseURL);
   const messages = buildTranslationMessages(request);
 
   const stream = await client.chat.completions.create({
     model: request.model,
     messages,
     stream: true,
-    temperature: providerConfig.params?.temperature ?? 0.3,
+    temperature: DEFAULT_TEMPERATURE,
   });
 
   const encoder = new TextEncoder();

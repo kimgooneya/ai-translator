@@ -3,39 +3,18 @@ import type { RequestHandler } from "./$types";
 import { APIError } from "openai";
 import {
   translationRequestSchema,
-  type Settings,
   type TranslationRequest,
+  type ResolvedProvider,
 } from "$lib/schemas";
 import { streamTranslation } from "$lib/providers/translate";
-
-/**
- * Build a minimal `Settings` object from a validated `TranslationRequest`.
- *
- * RATIONALE (Option B from the task spec):
- * The existing `streamTranslation(request, settings)` requires a `Settings` instance
- * to (a) find a matching `ProviderConfig` and (b) resolve the provider definition
- * (incl. baseURL) via `getProviderById`. For the stateless `/api/translate` endpoint
- * we have no server-side settings store — the request body already carries
- * `apiKey`, `model`, and `providerId`. We synthesize a single-provider `Settings`
- * so `streamTranslation` works unchanged (no refactor, no broken existing tests).
- *
- * Preset providerIds resolve baseURL from `PRESET_PROVIDERS` automatically.
- * Unknown providerIds will trigger streamTranslation's `Provider not registered`
- * error, which the caller maps to 400 INVALID_REQUEST.
- */
-function buildSettingsFromRequest(req: TranslationRequest): Settings {
-  return {
-    providers: [
-      {
-        providerId: req.providerId,
-        apiKey: req.apiKey,
-        selectedModel: req.model,
-      },
-    ],
-    activeProviderId: req.providerId,
-    defaultTargetLang: req.targetLang,
-  };
-}
+import {
+  getEnabledPreset,
+  resolveActiveKey,
+  NoActiveKeyError,
+  KeyDecryptionError,
+} from "$lib/server/provider-keys";
+import { createSupabaseAdminClient } from "$lib/server/supabase-admin";
+import type { Database } from "$lib/supabase/database.types";
 
 type ErrorBody = { error: string; message: string };
 type ErrorResponse = { status: number; body: ErrorBody };
@@ -45,9 +24,10 @@ function invalidRequest(message: string): ErrorResponse {
 }
 
 /**
- * Map an error thrown by `streamTranslation` (or the OpenAI SDK) to an HTTP error
- * response. Pre-stream errors (e.g. 401 / 429 on the initial request) land here;
- * mid-stream errors are handled separately by `wrapStreamWithErrorHandling`.
+ * Map an error thrown by `streamTranslation` (or the OpenAI SDK) to an HTTP
+ * error response. Pre-stream errors (e.g. 401 / 429 on the initial request)
+ * land here; mid-stream errors are handled separately by
+ * `wrapStreamWithErrorHandling`.
  */
 function mapProviderError(err: unknown): ErrorResponse {
   if (err instanceof APIError) {
@@ -68,27 +48,25 @@ function mapProviderError(err: unknown): ErrorResponse {
       body: { error: "PROVIDER_ERROR", message: err.message },
     };
   }
-  // streamTranslation throws plain `Error` for unknown provider ids.
-  if (
-    err instanceof Error &&
-    /not registered|not found in settings/i.test(err.message)
-  ) {
-    return invalidRequest(err.message);
+  // Decrypt failures surface as KeyDecryptionError — never reveal key/crypto
+  // details, just a generic provider error.
+  if (err instanceof KeyDecryptionError) {
+    return {
+      status: 500,
+      body: {
+        error: "PROVIDER_ERROR",
+        message: "저장된 API 키를 복호화하지 못했습니다",
+      },
+    };
   }
   const message = err instanceof Error ? err.message : "Unknown provider error";
   return { status: 500, body: { error: "PROVIDER_ERROR", message } };
 }
 
 /**
- * Wrap a `ReadableStream<Uint8Array>` so that mid-stream errors surface as a final
- * SSE error event (`event: error\ndata: ...\n\n`) instead of abruptly terminating
- * the HTTP connection.
- *
- * The HTTP response is already 200 + Content-Type: text/event-stream by the time
- * the inner stream is being consumed, so we cannot change the status code. We emit
- * a well-formed SSE error event and close cleanly. Clients (Task 12
- * `consumeTranslationStream`) detect the `event: error` line and surface the
- * error to the UI; chunks already sent before the error are preserved.
+ * Wrap a `ReadableStream<Uint8Array>` so that mid-stream errors surface as a
+ * final SSE error event (`event: error\ndata: ...\n\n`) instead of abruptly
+ * terminating the HTTP connection. Wire format preserved exactly.
  */
 function wrapStreamWithErrorHandling(
   inner: ReadableStream<Uint8Array>,
@@ -124,7 +102,130 @@ function wrapStreamWithErrorHandling(
   });
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+type SseParsed =
+  | { type: "chunk"; text: string }
+  | { type: "error"; errorCode: string | null }
+  | { type: "done" }
+  | null;
+
+/** Parse one raw SSE event (bytes between two `\n\n` boundaries). */
+function parseSseEvent(rawEvent: string): SseParsed {
+  const lines = rawEvent.split("\n");
+  let eventType = "message";
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trim());
+    }
+  }
+  const data = dataLines.join("\n");
+  if (eventType === "error") {
+    try {
+      const parsed = JSON.parse(data) as { error?: string };
+      return { type: "error", errorCode: parsed.error ?? null };
+    } catch {
+      return { type: "error", errorCode: null };
+    }
+  }
+  if (data === "[DONE]") return { type: "done" };
+  if (data === "") return null;
+  return { type: "chunk", text: data };
+}
+
+type UsageResult = {
+  outputChars: number;
+  status: "ok" | "error";
+  errorCode: string | null;
+};
+
+/**
+ * Pass-through wrapper that counts translated output chars and detects a
+ * terminal error event, then fires {@link onComplete} exactly once when the
+ * stream finishes naturally. Bytes forwarded to the client are IDENTICAL to
+ * the input — this wrapper only observes a decoded copy for telemetry.
+ *
+ * User-initiated cancellation does NOT fire `onComplete` (no usage row) —
+ * only natural completion (ok) or a server-side mid-stream error do.
+ */
+function wrapStreamWithUsage(
+  source: ReadableStream<Uint8Array>,
+  onComplete: (result: UsageResult) => void,
+): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const reader = source.getReader();
+  let buffer = "";
+  let outputChars = 0;
+  let status: "ok" | "error" = "ok";
+  let errorCode: string | null = null;
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          onComplete({ outputChars, status, errorCode });
+          return;
+        }
+        // Forward the exact bytes to the client.
+        controller.enqueue(value);
+        // Observe a decoded copy for usage counting.
+        buffer += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buffer.indexOf("\n\n")) >= 0) {
+          const rawEvent = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const parsed = parseSseEvent(rawEvent);
+          if (!parsed) continue;
+          if (parsed.type === "error") {
+            status = "error";
+            errorCode = parsed.errorCode;
+          } else if (parsed.type === "chunk") {
+            outputChars += parsed.text.length;
+          }
+        }
+      } catch (err) {
+        // The source is the error-wrapped stream, which never throws under
+        // normal operation. If something truly unexpected happens, surface it
+        // and record an error status.
+        controller.error(err);
+        onComplete({
+          outputChars,
+          status: "error",
+          errorCode: "STREAM_INTERRUPTED",
+        });
+      }
+    },
+    cancel(reason) {
+      void reader.cancel(reason);
+    },
+  });
+}
+
+type UsageLogInsert = Database["public"]["Tables"]["usage_logs"]["Insert"];
+
+/**
+ * Fire-and-forget `usage_logs` insert via the service_role client. MUST NOT
+ * block or reject into the response path — any failure is logged and swallowed
+ * (usage telemetry is best-effort, never user-facing).
+ */
+function insertUsageLog(entry: UsageLogInsert): void {
+  void (async () => {
+    try {
+      const admin = createSupabaseAdminClient();
+      const { error } = await admin.from("usage_logs").insert(entry);
+      if (error) {
+        console.warn("[usage_logs] insert failed:", error.message);
+      }
+    } catch (err) {
+      console.warn("[usage_logs] insert threw:", err);
+    }
+  })();
+}
+
+export const POST: RequestHandler = async ({ request, locals }) => {
   // 1. Parse JSON body.
   let body: unknown;
   try {
@@ -133,30 +234,104 @@ export const POST: RequestHandler = async ({ request }) => {
     return json(invalidRequest("Invalid JSON body").body, { status: 400 });
   }
 
-  // 2. Validate against the translation request schema.
+  // 2. Validate against the (apiKey-less) translation request schema.
   const parsed = translationRequestSchema.safeParse(body);
   if (!parsed.success) {
     return json(invalidRequest(parsed.error.message).body, { status: 400 });
   }
-  const translationRequest = parsed.data;
+  const req: TranslationRequest = parsed.data;
 
-  // 3. Build minimal settings from request and start the provider stream.
-  //    Pre-stream errors (401 / 429 / unknown provider) are caught here and
-  //    mapped to a JSON error response before any SSE data is sent.
+  // 3. Auth — hooks.server.ts guarantees a logged-in user for non-public
+  //    routes, so this is purely defensive. If the session/profile is somehow
+  //    missing, refuse before touching the DB.
+  const profile = locals.profile;
+  if (!locals.user || !profile) {
+    return json(
+      { error: "INVALID_REQUEST", message: "인증이 필요합니다" },
+      { status: 401 },
+    );
+  }
+
+  // 4. Resolve the provider preset from the DB. Unknown/disabled providers
+  //    are rejected as INVALID_REQUEST before any key lookup.
+  const preset = await getEnabledPreset(req.providerId);
+  if (!preset) {
+    return json(
+      invalidRequest(`Provider "${req.providerId}" not available`).body,
+      { status: 400 },
+    );
+  }
+  if (!preset.models.includes(req.model)) {
+    return json(
+      invalidRequest(
+        `Model "${req.model}" is not available for provider "${preset.display_name}"`,
+      ).body,
+      { status: 400 },
+    );
+  }
+
+  // 5. Resolve + decrypt the active managed key. No key → 401 (admin must add
+  //    one). Decrypt failure → 500 PROVIDER_ERROR (never reveal key details).
+  let apiKey: string;
+  try {
+    apiKey = await resolveActiveKey(req.providerId);
+  } catch (err) {
+    if (err instanceof NoActiveKeyError) {
+      return json(
+        {
+          error: "INVALID_API_KEY",
+          message: "이 provider에 등록된 API 키가 없습니다",
+        },
+        { status: 401 },
+      );
+    }
+    const mapped = mapProviderError(err);
+    return json(mapped.body, { status: mapped.status });
+  }
+
+  // 6. Build the resolved provider and start the stream. baseURL comes from
+  //    the DB preset (NOT the client/PRESET_PROVIDERS). Pre-stream provider
+  //    errors (401/429/500) are mapped to JSON before any SSE is sent.
+  const resolved: ResolvedProvider = {
+    id: preset.id,
+    name: preset.display_name,
+    baseURL: preset.base_url,
+    models: preset.models,
+    defaultModel: preset.default_model,
+    apiKey,
+  };
+
   let innerStream: ReadableStream<Uint8Array>;
   try {
-    innerStream = await streamTranslation(
-      translationRequest,
-      buildSettingsFromRequest(translationRequest),
-    );
+    innerStream = await streamTranslation(req, resolved);
   } catch (err) {
     const mapped = mapProviderError(err);
     return json(mapped.body, { status: mapped.status });
   }
 
-  // 4. Wrap with mid-stream error handling and return the SSE response.
+  // 7. Wrap with mid-stream error handling (SSE error event) and usage
+  //    telemetry (counts output chars, fire-and-forget usage_logs insert).
   //    Same-origin only: no CORS `Access-Control-Allow-Origin` header is set.
-  const stream = wrapStreamWithErrorHandling(innerStream);
+  const startedAt = Date.now();
+  const errorWrapped = wrapStreamWithErrorHandling(innerStream);
+  const stream = wrapStreamWithUsage(
+    errorWrapped,
+    ({ outputChars, status, errorCode }) => {
+      insertUsageLog({
+        user_id: profile.id,
+        provider_id: req.providerId,
+        model: req.model,
+        source_lang: req.sourceLang,
+        target_lang: req.targetLang,
+        input_chars: req.sourceText.length,
+        output_chars: outputChars,
+        duration_ms: Date.now() - startedAt,
+        status,
+        error_code: errorCode,
+      });
+    },
+  );
+
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",

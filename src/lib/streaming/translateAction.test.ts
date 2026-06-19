@@ -7,7 +7,6 @@ const baseRequest: TranslationRequest = {
   sourceLang: "auto",
   targetLang: "ko",
   providerId: "openai",
-  apiKey: "sk-test",
   model: "gpt-5.4-mini",
 };
 

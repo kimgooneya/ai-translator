@@ -73,42 +73,38 @@ describe("providerSchema", () => {
 });
 
 describe("providerConfigSchema", () => {
-  it("accepts valid config without params", () => {
+  it("accepts a valid selection config", () => {
     const valid = {
       providerId: "openai",
-      apiKey: "sk-xxx",
       selectedModel: "gpt-5.4",
     };
     expect(providerConfigSchema.parse(valid)).toEqual(valid);
   });
 
-  it("accepts valid config with params", () => {
-    const valid = {
-      providerId: "openai",
-      apiKey: "sk-xxx",
-      selectedModel: "gpt-5.4",
-      params: { temperature: 0.3, maxTokens: 1000 },
-    };
-    expect(providerConfigSchema.parse(valid)).toEqual(valid);
+  it("rejects a missing selectedModel", () => {
+    expect(() =>
+      providerConfigSchema.parse({ providerId: "openai" }),
+    ).toThrow();
   });
 
-  it("rejects temperature > 2", () => {
-    const invalid = {
-      providerId: "openai",
-      apiKey: "sk-xxx",
-      selectedModel: "gpt-5.4",
-      params: { temperature: 5 },
-    };
-    expect(() => providerConfigSchema.parse(invalid)).toThrow();
+  it("rejects an empty providerId", () => {
+    expect(() =>
+      providerConfigSchema.parse({ providerId: "", selectedModel: "gpt-5.4" }),
+    ).toThrow();
   });
 
-  it("allows empty apiKey (validation happens at request time)", () => {
-    const valid = {
+  it("strips legacy apiKey/baseURL/params fields on parse (managed-key migration)", () => {
+    const parsed = providerConfigSchema.parse({
       providerId: "openai",
-      apiKey: "",
       selectedModel: "gpt-5.4",
-    };
-    expect(providerConfigSchema.parse(valid)).toEqual(valid);
+      apiKey: "sk-legacy",
+      baseURL: "https://api.openai.com/v1",
+      params: { temperature: 0.7 },
+    });
+    expect(parsed).toEqual({
+      providerId: "openai",
+      selectedModel: "gpt-5.4",
+    });
   });
 });
 
@@ -160,7 +156,6 @@ describe("translationRequestSchema", () => {
     sourceLang: "auto" as const,
     targetLang: "ko",
     providerId: "openai",
-    apiKey: "sk-xxx",
     model: "gpt-5.4",
   };
 
@@ -179,10 +174,12 @@ describe("translationRequestSchema", () => {
     ).toThrow();
   });
 
-  it("rejects empty apiKey", () => {
-    expect(() =>
-      translationRequestSchema.parse({ ...validBase, apiKey: "" }),
-    ).toThrow();
+  it("strips a stray apiKey from the body (managed-key: no apiKey accepted)", () => {
+    const parsed = translationRequestSchema.parse({
+      ...validBase,
+      apiKey: "sk-should-be-ignored",
+    });
+    expect(parsed).not.toHaveProperty("apiKey");
   });
 
   it("accepts glossary and customPrompt", () => {
@@ -223,7 +220,6 @@ describe("translationHistoryEntrySchema", () => {
         sourceLang: "auto",
         targetLang: "ko",
         providerId: "openai",
-        apiKey: "sk-xxx",
         model: "gpt-5.4",
       },
       response: "안녕하세요",
@@ -244,7 +240,6 @@ describe("translationHistoryEntrySchema", () => {
         sourceLang: "auto",
         targetLang: "ko",
         providerId: "openai",
-        apiKey: "sk-xxx",
         model: "gpt-5.4",
       },
       response: "안녕하세요",

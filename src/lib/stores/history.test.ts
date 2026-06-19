@@ -21,7 +21,6 @@ function entry(
       sourceLang: "auto",
       targetLang: "ko",
       providerId: "openai",
-      apiKey: "sk-test",
       model: "gpt-5.4-mini",
     },
     response: "안녕하세요",
@@ -94,7 +93,6 @@ describe("historyStore", () => {
             sourceLang: "auto",
             targetLang: "ko",
             providerId: "openai",
-            apiKey: "sk-test",
             model: "gpt-5.4-mini",
             customPrompt: "비즈니스 격식체",
             glossary: {

@@ -43,7 +43,8 @@
   },
   "settings_page": {
     "title": "Configurações",
-    "security_notice": "As API keys ficam salvas só no localStorage do seu navegador. Elas nunca saem do seu dispositivo.",
+    "security_notice": "As API keys agora são gerenciadas pelo administrador. Você não digita nenhuma chave — o servidor resolve uma com segurança a cada tradução.",
+    "loading_providers": "Carregando lista de provedores…",
     "api_key_label": "API key",
     "api_key_placeholder": "Cole sua API key aqui",
     "api_key_set": "Configurada",

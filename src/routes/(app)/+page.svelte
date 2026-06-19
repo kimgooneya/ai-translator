@@ -1,9 +1,9 @@
 <script lang="ts">
   import { settingsStore } from "$lib/stores/settings";
+  import { providerCatalogStore } from "$lib/stores/providers";
   import { glossaryStore } from "$lib/stores/glossary";
   import { addHistoryEntry } from "$lib/stores/history";
   import { toast } from "svelte-sonner";
-  import { getProviderById } from "$lib/providers/registry";
   import { _ } from "svelte-i18n";
   import { getErrorMessage } from "$lib/constants/error-messages";
   import { translateAction } from "$lib/streaming/translateAction";
@@ -37,28 +37,30 @@
 
   let settings = $derived($settingsStore);
   let glossary = $derived($glossaryStore);
+  let catalog = $derived($providerCatalogStore);
 
   let activeProviderConfig = $derived(
     settings.providers.find((p) => p.providerId === settings.activeProviderId),
   );
 
-  let hasActiveProvider = $derived(settings.activeProviderId !== null);
-  let hasApiKey = $derived((activeProviderConfig?.apiKey ?? "").trim() !== "");
-
+  // The active provider definition (models/baseURL) comes from the
+  // server-provided catalog — never from client settings. Keys are resolved
+  // server-side, so the client has no key concept at all.
   let activeProvider = $derived(
     settings.activeProviderId
-      ? getProviderById(settings, settings.activeProviderId)
+      ? (catalog.find((p) => p.id === settings.activeProviderId) ?? undefined)
       : undefined,
   );
 
+  let hasActiveProvider = $derived(activeProvider !== undefined);
   let availableModels = $derived(activeProvider?.models ?? []);
 
   let effectiveSourceText = $derived(loadedFile?.content ?? sourceText);
 
   let canTranslate = $derived(
     effectiveSourceText.trim() !== "" &&
-      hasApiKey &&
       hasActiveProvider &&
+      model !== "" &&
       !isLoading,
   );
 
@@ -94,16 +96,16 @@
 
     abortController = new AbortController();
 
-    const providerName =
-      activeProvider?.name ?? settings.activeProviderId ?? "";
+    const providerName = activeProvider?.name ?? settings.activeProviderId ?? "";
     const modelName = model || activeProviderConfig?.selectedModel || "";
 
+    // Managed-key request: NO apiKey. The server resolves an encrypted key
+    // from provider_keys based on the session + providerId.
     const request: TranslationRequest = {
       sourceText: effectiveSourceText,
       sourceLang: sourceLang,
       targetLang,
       providerId: settings.activeProviderId ?? "",
-      apiKey: activeProviderConfig?.apiKey ?? "",
       model: modelName,
       glossary: glossary.enabled ? glossary : undefined,
       customPrompt: customPrompt.trim() || undefined,
@@ -191,22 +193,19 @@
     bind:model
     {availableModels}
     {hasActiveProvider}
-    {hasApiKey}
     {isLoading}
     {canTranslate}
     ontranslate={handleTranslate}
     oncancel={handleCancel}
   />
 
-  {#if !hasApiKey}
+  {#if !hasActiveProvider}
     <div
-      data-testid="no-api-key-warning"
+      data-testid="no-provider-warning"
       class="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-md px-4 py-2"
     >
       <span class="text-sm text-destructive">
-        {hasActiveProvider
-          ? $_("errors.NO_API_KEY")
-          : $_("errors.NO_ACTIVE_PROVIDER")}
+        {$_("errors.NO_ACTIVE_PROVIDER")}
       </span>
       <a
         href="/settings"

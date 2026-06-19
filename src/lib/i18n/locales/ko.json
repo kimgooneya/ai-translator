@@ -43,7 +43,8 @@
   },
   "settings_page": {
     "title": "설정",
-    "security_notice": "API 키는 브라우저 localStorage에만 저장됩니다. 서버로 전송되지 않습니다.",
+    "security_notice": "이제 API 키는 관리자가 중앙에서 관리합니다. 사용자는 키를 입력하지 않으며, 번역 시 서버에서 안전하게 키를 불러옵니다.",
+    "loading_providers": "프로바이더 목록을 불러오는 중…",
     "api_key_label": "API 키",
     "api_key_placeholder": "API 키를 입력하세요",
     "api_key_set": "설정됨",
