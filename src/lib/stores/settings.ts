@@ -10,17 +10,19 @@ const fallback: Settings = {
 };
 
 /**
- * Settings migration.
+ * Settings migration — finalized for the managed-key model.
  *
- * Managed-key model: provider presets (incl. their model lists) now live in
- * the DB and are fetched into `providerCatalogStore`. Client settings no
- * longer carry API keys or custom-provider definitions, so there is nothing
- * to reconcile against a static `PRESET_PROVIDERS` list here. We pass the
- * stored settings through unchanged; the schema already strips legacy
- * `apiKey`/`baseURL`/`params`/custom-definition fields on load.
+ * Legacy BYOK fields (`apiKey`, `baseURL`, `params`, and any custom-provider
+ * definitions nested under `providers[]`) are stripped automatically: the
+ * `settingsSchema`/`providerConfigSchema` only allow `providerId` +
+ * `selectedModel`, and Zod's default strip mode (in `loadFromStorage`'s
+ * `schema.parse`) drops unknown keys before this function runs. So old BYOK
+ * localStorage never leaks secrets back into the app, and there is nothing
+ * left to strip here — this is an intentional passthrough.
  *
- * Stale-model reset against the live catalog is handled where the catalog is
- * available (the page), not in this synchronous localStorage migration.
+ * Stale-model reset (a stored `selectedModel` no longer in the live catalog)
+ * is NOT handled here: it needs the catalog, which is only available on the
+ * page, not in this synchronous localStorage migration.
  */
 export function migrateSettings(s: Settings): Settings {
   return { ...s };

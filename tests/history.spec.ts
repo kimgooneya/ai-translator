@@ -1,6 +1,15 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-const HISTORY_KEY = "translator.history";
+// History is Supabase-backed (translation_history table, RLS-scoped). The
+// historyStore is populated by a PostgREST GET on mount when a user is signed
+// in, so these specs mock /rest/v1/translation_history to seed data
+// deterministically. (Delete/clear issue matching DELETEs.)
+//
+// Managed-key note: the stored request payload carries NO apiKey — the server
+// resolves keys per request. These specs never seed one.
+// Like the other e2e files, reaching /history needs a logged-in user (auth gate).
+
+const HISTORY_ENDPOINT = "**/rest/v1/translation_history*";
 
 interface MinimalEntry {
   id: string;
@@ -9,7 +18,6 @@ interface MinimalEntry {
     sourceLang: string;
     targetLang: string;
     providerId: string;
-    apiKey: string;
     model: string;
     customPrompt?: string;
   };
@@ -17,6 +25,32 @@ interface MinimalEntry {
   providerName: string;
   modelName: string;
   createdAt: string;
+  tokensUsed?: number;
+}
+
+/** Snake-case DB row shape that loadHistory maps back into MinimalEntry. */
+interface HistoryRow {
+  id: string;
+  user_id: string;
+  request: MinimalEntry["request"];
+  response: string;
+  provider_name: string;
+  model_name: string;
+  created_at: string;
+  tokens_used: number | null;
+}
+
+function toRow(e: MinimalEntry, userId = "u-1"): HistoryRow {
+  return {
+    id: e.id,
+    user_id: userId,
+    request: e.request,
+    response: e.response,
+    provider_name: e.providerName,
+    model_name: e.modelName,
+    created_at: e.createdAt,
+    tokens_used: e.tokensUsed ?? null,
+  };
 }
 
 function makeEntries(n: number, prefix = "seed"): MinimalEntry[] {
@@ -29,7 +63,6 @@ function makeEntries(n: number, prefix = "seed"): MinimalEntry[] {
         sourceLang: "auto",
         targetLang: "ko",
         providerId: "openai",
-        apiKey: "sk-test",
         model: "gpt-4o-mini",
       },
       response: `번역 결과 ${i}`,
@@ -41,37 +74,62 @@ function makeEntries(n: number, prefix = "seed"): MinimalEntry[] {
   return out;
 }
 
-async function seedHistory(
-  page: import("@playwright/test").Page,
-  entries: MinimalEntry[],
+/**
+ * Intercept every Supabase PostgREST call on translation_history and back it
+ * with an in-memory array. GET returns the current rows newest-first (mirrors
+ * `.order("created_at", { ascending: false })`); DELETE removes rows matching
+ * the `id=eq.X` / `user_id=eq.X` filter supabase-js emits.
+ */
+async function mockHistory(
+  page: Page,
+  seed: MinimalEntry[],
 ): Promise<void> {
-  await page.addInitScript(
-    (args) => {
-      try {
-        localStorage.setItem(args.key, JSON.stringify(args.value));
-      } catch {
-        // ignore
+  const rows: HistoryRow[] = seed.map((e) => toRow(e));
+
+  await page.route(HISTORY_ENDPOINT, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+
+    if (request.method() === "GET") {
+      const sorted = [...rows].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(sorted),
+      });
+      return;
+    }
+
+    if (request.method() === "DELETE") {
+      const idFilter = url.searchParams.get("id");
+      const userFilter = url.searchParams.get("user_id");
+      if (idFilter) {
+        const id = idFilter.replace(/^eq\./, "");
+        const idx = rows.findIndex((r) => r.id === id);
+        if (idx >= 0) rows.splice(idx, 1);
+      } else if (userFilter) {
+        const uid = userFilter.replace(/^eq\./, "");
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (rows[i].user_id === uid) rows.splice(i, 1);
+        }
       }
-    },
-    { key: HISTORY_KEY, value: entries },
-  );
+      await route.fulfill({ status: 200, body: "" });
+      return;
+    }
+
+    await route.fulfill({ status: 200, body: "" });
+  });
 }
 
 test.describe("History page", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      try {
-        localStorage.removeItem("translator.history");
-      } catch {
-        // ignore
-      }
-    });
-  });
-
   test("renders the page heading and empty message when there is no history", async ({
     page,
   }) => {
+    await mockHistory(page, []);
     await page.goto("/history");
+
     await expect(
       page.getByRole("heading", { level: 1, name: "번역 기록" }),
     ).toBeVisible();
@@ -82,11 +140,13 @@ test.describe("History page", () => {
   });
 
   test("disables the clear-all button when empty", async ({ page }) => {
+    await mockHistory(page, []);
     await page.goto("/history");
     await expect(page.getByTestId("history-clear-all-button")).toBeDisabled();
   });
 
   test("renders the 100-entry limit notice", async ({ page }) => {
+    await mockHistory(page, []);
     await page.goto("/history");
     await expect(page.getByTestId("history-limit-notice")).toContainText(
       "100개를 초과하면",
@@ -96,14 +156,11 @@ test.describe("History page", () => {
     );
   });
 
-  test("renders seeded entries from localStorage newest-first", async ({
-    page,
-  }) => {
-    await seedHistory(page, makeEntries(3));
+  test("renders seeded entries newest-first", async ({ page }) => {
+    await mockHistory(page, makeEntries(3));
     await page.goto("/history");
 
     await expect(page.getByTestId("history-entry-card")).toHaveCount(3);
-    // Newest first → seed-2, seed-1, seed-0
     const ids = await page
       .getByTestId("history-entry-card")
       .evaluateAll((cards) =>
@@ -115,7 +172,7 @@ test.describe("History page", () => {
   test("shows provider, model, language pair, and previews on each card", async ({
     page,
   }) => {
-    await seedHistory(page, [
+    await mockHistory(page, [
       {
         id: "rich-1",
         request: {
@@ -123,7 +180,6 @@ test.describe("History page", () => {
           sourceLang: "en",
           targetLang: "ja",
           providerId: "deepseek",
-          apiKey: "sk-test",
           model: "deepseek-chat",
         },
         response: "こんにちは世界",
@@ -149,7 +205,7 @@ test.describe("History page", () => {
   test("truncates previews longer than 50 characters", async ({ page }) => {
     const longSource = "a".repeat(80);
     const longResponse = "b".repeat(80);
-    await seedHistory(page, [
+    await mockHistory(page, [
       {
         id: "long-1",
         request: {
@@ -157,7 +213,6 @@ test.describe("History page", () => {
           sourceLang: "auto",
           targetLang: "ko",
           providerId: "openai",
-          apiKey: "sk-test",
           model: "gpt-4o-mini",
         },
         response: longResponse,
@@ -184,7 +239,7 @@ test.describe("History page", () => {
   }) => {
     const longSource = "x".repeat(80);
     const longResponse = "y".repeat(80);
-    await seedHistory(page, [
+    await mockHistory(page, [
       {
         id: "detail-1",
         request: {
@@ -192,7 +247,6 @@ test.describe("History page", () => {
           sourceLang: "auto",
           targetLang: "ko",
           providerId: "openai",
-          apiKey: "sk-test",
           model: "gpt-4o-mini",
           customPrompt: "비즈니스 격식체",
         },
@@ -208,7 +262,6 @@ test.describe("History page", () => {
     await page.getByTestId("history-detail-button").click();
     await expect(page.getByTestId("history-detail-modal")).toBeVisible();
 
-    // Full untruncated content
     await expect(page.getByTestId("history-detail-source")).toContainText(
       longSource,
     );
@@ -223,7 +276,7 @@ test.describe("History page", () => {
   test("closes the detail panel when the close button is clicked", async ({
     page,
   }) => {
-    await seedHistory(page, makeEntries(1));
+    await mockHistory(page, makeEntries(1));
     await page.goto("/history");
 
     await page.getByTestId("history-detail-button").click();
@@ -236,7 +289,7 @@ test.describe("History page", () => {
   test("deletes a single entry when the card 삭제 button is clicked", async ({
     page,
   }) => {
-    await seedHistory(page, makeEntries(2));
+    await mockHistory(page, makeEntries(2));
     await page.goto("/history");
     await expect(page.getByTestId("history-entry-card")).toHaveCount(2);
 
@@ -250,20 +303,12 @@ test.describe("History page", () => {
       .getByTestId("history-entry-card")
       .getAttribute("data-entry-id");
     expect(remainingId).toBe("seed-0");
-
-    const raw = await page.evaluate(
-      (key) => localStorage.getItem(key),
-      HISTORY_KEY,
-    );
-    const parsed = JSON.parse(raw ?? "[]");
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].id).toBe("seed-0");
   });
 
   test("clears all entries after confirming the 전체 삭제 dialog", async ({
     page,
   }) => {
-    await seedHistory(page, makeEntries(3));
+    await mockHistory(page, makeEntries(3));
     await page.goto("/history");
     await expect(page.getByTestId("history-entry-card")).toHaveCount(3);
 
@@ -278,18 +323,12 @@ test.describe("History page", () => {
 
     await expect(page.getByTestId("history-entry-card")).toHaveCount(0);
     await expect(page.getByTestId("history-empty-message")).toBeVisible();
-
-    const raw = await page.evaluate(
-      (key) => localStorage.getItem(key),
-      HISTORY_KEY,
-    );
-    expect(JSON.parse(raw ?? "[]")).toEqual([]);
   });
 
   test("does NOT clear all entries when the 전체 삭제 dialog is dismissed", async ({
     page,
   }) => {
-    await seedHistory(page, makeEntries(2));
+    await mockHistory(page, makeEntries(2));
     await page.goto("/history");
 
     page.on("dialog", async (dialog) => {
@@ -298,15 +337,10 @@ test.describe("History page", () => {
     await page.getByTestId("history-clear-all-button").click();
 
     await expect(page.getByTestId("history-entry-card")).toHaveCount(2);
-    const raw = await page.evaluate(
-      (key) => localStorage.getItem(key),
-      HISTORY_KEY,
-    );
-    expect(JSON.parse(raw ?? "[]")).toHaveLength(2);
   });
 
   test("renders up to 100 entries without issues", async ({ page }) => {
-    await seedHistory(page, makeEntries(100));
+    await mockHistory(page, makeEntries(100));
     await page.goto("/history");
 
     await expect(page.getByTestId("history-entry-card")).toHaveCount(100);

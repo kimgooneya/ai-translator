@@ -1,28 +1,42 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // Verifies that error toasts stay visible for ~10 seconds, matching the
-// `toast.error(msg, { duration: 10000 })` contract wired up in
-// `src/routes/+page.svelte` (translateAction onError + invalid file type).
-// Default (non-error) Sonner toasts auto-close at 4s, so this is a
-// deliberate override for errors that users need time to read.
+// `toast.error(msg, { duration: 10000 })` contract wired up in the translate
+// page (translateAction onError + invalid file type). Default (non-error)
+// Sonner toasts auto-close at 4s, so this is a deliberate override for errors
+// that users need time to read.
 
-// The settings literal must live inside seedSettings(): addInitScript only
-// serializes the function body, so module-scope consts are undefined in-page.
+// Managed-key: settings carry no apiKey.
 function seedSettings(): void {
   localStorage.setItem(
     "translator.settings",
     JSON.stringify({
-      providers: [
-        {
-          providerId: "openai",
-          apiKey: "sk-e2e-key",
-          selectedModel: "gpt-4o-mini",
-        },
-      ],
+      providers: [{ providerId: "openai", selectedModel: "gpt-5.4-mini" }],
       activeProviderId: "openai",
       defaultTargetLang: "ko",
     }),
   );
+}
+
+async function mockCatalog(page: Page): Promise<void> {
+  await page.route("**/api/user/providers", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        providers: [
+          {
+            id: "openai",
+            name: "OpenAI",
+            kind: "preset",
+            baseURL: "https://api.openai.com/v1",
+            models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"],
+            defaultModel: "gpt-5.4-mini",
+          },
+        ],
+      }),
+    });
+  });
 }
 
 function capturePageErrors(page: Page): string[] {
@@ -58,6 +72,7 @@ test.describe("Error toast duration (10s)", () => {
   });
 
   test("error toast stays visible for ~10 seconds", async ({ page }) => {
+    await mockCatalog(page);
     await page.addInitScript(seedSettings);
     await page.route("**/api/translate", async (route) => {
       await route.fulfill({
