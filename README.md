@@ -65,8 +65,8 @@ npm install
    ```
 
    Then fill in all four values (see `.env.example` for which are server-only):
-   - `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY` — from Project Settings → API. The anon key is browser-safe (RLS protects every table).
-   - `SUPABASE_SERVICE_ROLE_KEY` — server-only, bypasses RLS (used for `provider_keys` reads + `usage_logs` inserts). **Never expose to the browser.**
+   - `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY` — from Dashboard → Settings → API Keys. The publishable key (`sb_publishable_...`) is browser-safe (RLS protects every table).
+   - `SUPABASE_SECRET_KEY` — server-only (`sb_secret_...`), bypasses RLS (used for `provider_keys` reads + `usage_logs` inserts). Supabase's new secret keys also self-protect by returning HTTP 401 when a browser User-Agent is detected. **Never expose to the browser.**
    - `ENCRYPTION_KEY` — base64-encoded 32-byte key for AES-256-GCM. Generate one:
      ```bash
      node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
@@ -127,12 +127,12 @@ Admin routes are double-guarded: `hooks.server.ts` 404s any `/admin/*` or `/api/
 
 ## Environment variables
 
-| Variable                    | Scope     | Purpose                                                                 |
-| ---------------------------- | --------- | ----------------------------------------------------------------------- |
-| `PUBLIC_SUPABASE_URL`        | browser   | Supabase project URL                                                    |
-| `PUBLIC_SUPABASE_ANON_KEY`   | browser   | Supabase anon key (RLS-protected; safe to expose)                       |
-| `SUPABASE_SERVICE_ROLE_KEY`  | server    | Bypasses RLS — `provider_keys` reads + `usage_logs` inserts. Never ship to the browser bundle. |
-| `ENCRYPTION_KEY`             | server    | Base64 32-byte AES-256-GCM master key. Rotating it requires re-adding every provider key. |
+| Variable                       | Scope     | Purpose                                                                 |
+| ------------------------------ | --------- | ----------------------------------------------------------------------- |
+| `PUBLIC_SUPABASE_URL`          | browser   | Supabase project URL                                                    |
+| `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | browser | Supabase publishable key (`sb_publishable_...`; RLS-protected, safe to expose) |
+| `SUPABASE_SECRET_KEY`          | server    | Supabase secret key (`sb_secret_...`) — bypasses RLS for `provider_keys` reads + `usage_logs` inserts. Never ship to the browser bundle. |
+| `ENCRYPTION_KEY`               | server    | Base64 32-byte AES-256-GCM master key. Rotating it requires re-adding every provider key. |
 
 Server-only vars are imported via `$env/static/private` from `src/lib/server/**` only, so Vite never bundles them for the client.
 
@@ -153,7 +153,7 @@ vercel --prod   # Production deploy
 1. Push your repository to GitHub
 2. In Vercel dashboard: New Project, select your repo
 3. Framework Preset: SvelteKit (auto-detected)
-4. Add **all four** environment variables (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`)
+4. Add **all four** environment variables (`PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ENCRYPTION_KEY`)
 5. Click Deploy
 6. After deploy, bootstrap the first admin and add provider keys (see **Admin setup** above)
 
@@ -165,7 +165,7 @@ src/
   lib/
     server/                  # SERVER-ONLY (never imported by client code)
       crypto.ts              # AES-256-GCM encryptKey/decryptKey (ENCRYPTION_KEY)
-      supabase-admin.ts      # service_role client (bypasses RLS)
+      supabase-admin.ts      # secret-key client (bypasses RLS)
       provider-keys.ts       # getEnabledPreset / resolveActiveKey (decrypt in memory)
     components/              # Svelte components (shadcn-svelte based)
     components/ui/           # Vendored shadcn-svelte primitives
@@ -193,7 +193,7 @@ supabase/
 
 ## Privacy
 
-- **Provider API keys** are stored **encrypted at rest** (AES-256-GCM) in Supabase's `provider_keys` table and decrypted **only** inside the `/api/translate` server handler, in memory, for the duration of one request. They are never logged, never sent to analytics, and never reach the browser. The admin (project owner) holds the `SUPABASE_SERVICE_ROLE_KEY` and the `ENCRYPTION_KEY` — host your own Supabase + rotate these if you need full self-hosting.
+- **Provider API keys** are stored **encrypted at rest** (AES-256-GCM) in Supabase's `provider_keys` table and decrypted **only** inside the `/api/translate` server handler, in memory, for the duration of one request. They are never logged, never sent to analytics, and never reach the browser. The admin (project owner) holds the `SUPABASE_SECRET_KEY` and the `ENCRYPTION_KEY` — host your own Supabase + rotate these if you need full self-hosting.
 - **Users never handle API keys.** They only pick a provider + model from the admin-curated catalog.
 - **Translation history + glossary** are stored in your Supabase account, protected by Row Level Security (each row is visible only to its owner).
 - **Usage telemetry** (`usage_logs`) records per-translation volume/status for the admin stats dashboard; readable by the owner and by admins only.

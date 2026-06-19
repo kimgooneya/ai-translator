@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import {
   PUBLIC_SUPABASE_URL,
-  PUBLIC_SUPABASE_ANON_KEY,
+  PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 } from "$env/static/public";
 import type { Cookies } from "@sveltejs/kit";
 import type { Database } from "./database.types";
@@ -13,7 +13,7 @@ import type { Database } from "./database.types";
 export function createSupabaseServerClient(cookies: Cookies) {
   return createServerClient<Database>(
     PUBLIC_SUPABASE_URL,
-    PUBLIC_SUPABASE_ANON_KEY,
+    PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       cookies: {
         getAll() {
