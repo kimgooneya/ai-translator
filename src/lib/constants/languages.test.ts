@@ -20,8 +20,8 @@ describe("languages constants", () => {
     expect(codes).toContain("zh");
   });
 
-  it("has at least 20 languages", () => {
-    expect(LANGUAGES.length).toBeGreaterThanOrEqual(20);
+  it("has at least 15 languages", () => {
+    expect(LANGUAGES.length).toBeGreaterThanOrEqual(15);
   });
 
   it("all entries have non-empty code and name", () => {

@@ -58,7 +58,7 @@
       >
         {findLanguage(sourceLang)?.name ?? sourceLang}
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content class="max-h-[320px]">
         {#each allLanguages as lang (lang.code)}
           <Select.Item value={lang.code} label={lang.name}
             >{lang.name}</Select.Item
@@ -96,7 +96,7 @@
       >
         {findLanguage(targetLang)?.name ?? targetLang}
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content class="max-h-[320px]">
         {#each LANGUAGES as lang (lang.code)}
           <Select.Item value={lang.code} label={lang.name}
             >{lang.name}</Select.Item
