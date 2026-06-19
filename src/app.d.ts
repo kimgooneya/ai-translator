@@ -6,7 +6,7 @@
 /// <reference types="vitest/globals" />
 
 import type { SupabaseClient, Session, User } from "@supabase/supabase-js";
-import type { Database } from "$lib/supabase/database.types";
+import type { Database, Profile } from "$lib/supabase/database.types";
 
 declare global {
   namespace App {
@@ -15,6 +15,7 @@ declare global {
       supabase: SupabaseClient<Database>;
       session: Session | null;
       user: User | null;
+      profile: Profile | null;
     }
     // interface PageData {}
     // interface PageState {}
